@@ -61,7 +61,14 @@ Verifierade genom att surfa till `http://51.12.242.137` i webbläsaren. Nginx st
 ![Nginx välkomstsida](images/nginx-welkomstsida.png)
 
 ### 4. Driftsätt kundtjänstsidan
-*(fylls i)*
+Skrev kundtjänstsidan (`public/index.html`) med rubrik och ärendeformulär (namn, e-post, meddelande) lokalt, och kopierade sedan filen till servern via `scp`. Flyttade den därefter till Nginx webbrot med `sudo mv`.
+
+```powershell
+scp -i E:\MOV25\Uppgifter\Azure\vm-novatrix-web-key.pem -r E:\MOV25\GitHub\azure\UppgiftV34\public\* azureuser-web@51.12.243.134:~/
+ssh -i E:\MOV25\Uppgifter\Azure\vm-novatrix-web-key.pem azureuser-web@51.12.243.134 "sudo mv ~/index.html /var/www/html/"
+```
+
+Resultat: *(fylls i — bekräfta att sidan visas på servern)*
 
 ### 5. Verifiering
 *(fylls i)*
