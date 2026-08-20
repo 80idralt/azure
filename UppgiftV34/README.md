@@ -14,15 +14,26 @@ Novatrix AB vill flytta sin kundtjänst till molnet. Den här veckan sätts en v
 *(fylls i)*
 
 ### 2. Anslutning via SSH
-Satte behörighet på SSH-nyckeln (endast min användare får läsa den) och kopplade upp mot servern.
+Satte behörighet på SSH-nyckeln så att endast min användare kan läsa den. Första försöket gav felet `Bad permissions ... This private key will be ignored` eftersom grupper som `Autentiserade användare` fortfarande hade rättigheter kvar på filen. Löste det genom att nollställa behörigheterna helt innan de sattes om.
 
 ```powershell
+icacls .\vm-novatrix-web_key.pem /reset
 icacls .\vm-novatrix-web_key.pem /inheritance:r
 icacls .\vm-novatrix-web_key.pem /grant:r "$($env:USERNAME):R"
-ssh -i .\vm-novatrix-web_key.pem azureuser@<PUBLIK-IP>
+icacls .\vm-novatrix-web_key.pem
 ```
 
-Resultat: *(fylls i efter lyckad inloggning)*
+```
+.\vm-novatrix-web_key.pem IDRISDESKTOP\altun:(R)
+```
+
+Anslöt sedan till servern:
+
+```powershell
+ssh -i .\vm-novatrix-web_key.pem azureuser@51.12.242.137
+```
+
+Resultat: Inloggad som `azureuser` på `vm-novatrix-web` (Ubuntu 24.04.4 LTS), prompt `azureuser@vm-novatrix-web:~$`.
 
 ### 3. Installera Nginx
 *(fylls i)*
