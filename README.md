@@ -8,12 +8,13 @@ Varje veckomapp har en egen README som dokumenterar veckans arbete, med syfte, s
 
 ## Innehåll
 - [x] [V34 - Compute](Uppgift%20V34/); Driftsättning av Novatrix kundtjänst på en virtuell maskin
-- [ ] V35 - IAM och identitet
-- [ ] V36 - Nätverk och säkerhet
-- [ ] V37 - Storage
-- [ ] V38 - IaC med ARM-templates
-- [ ] V39 - Automation och integration
-- [ ] V40 - Virtualiseringsnivåer
+- [ ] [V35 - IAM och identitet](Uppgift%20V35/)
+- [ ] [V36 - Nätverk och säkerhet](Uppgift%20V36/)
+- [ ] [V37 - Storage](Uppgift%20V37/)
+- [ ] [V38 - IaC med ARM-templates](Uppgift%20V38/)
+- [ ] [V39 - Automation och integration](Uppgift%20V39/)
+- [ ] [V40 - Virtualiseringsnivåer](Uppgift%20V40/)
+- [ ] [V41](Uppgift%20V41/)
 
 ## Om Novatrix
 
