@@ -17,7 +17,7 @@ Skapade resursgruppen och den virtuella maskinen via Azure-portalens guide "Crea
 - **VM-namn:** `vm-novatrix-web`
 - **Image:** Ubuntu Server 24.04 LTS (`canonical:ubuntu-24_04-lts:server`)
 - **Storlek:** `Standard_B2ats_v2` — billig burstable ARM-instans, vald med tanke på kostnad eftersom Novatrix inte behöver mer prestanda än så för en enkel kundtjänstsida
-- **Autentisering:** SSH-nyckelpar genererades av portalen under skapandet och laddades ner som `vm-novatrix-web_key.pem`, admin-användare `azureuser-web`
+- **Autentisering:** SSH-nyckelpar genererades av portalen under skapandet och laddades ner som `vm-novatrix-web-key.pem`, admin-användare `azureuser-web`
 - **Nätverk:** publikt IP `51.12.243.134`, nätverkssäkerhetsgrupp `vm-novatrix-web-nsg` med inkommande regler för SSH (port 22) och HTTP (port 80)
 
 Verifierade att resurserna skapats korrekt med Azure CLI:
@@ -46,19 +46,14 @@ Amount    Category    Name                   TimeGrain    ResourceGroup
 100.0     Cost        bg-rg-novatrixvecka34  Monthly      rg-novatrix-v34
 ```
 
-```json
-{
-  "amount": "100.0",
-  "currentSpend": { "amount": "0.0", "unit": "SEK" },
-  "resourceGroup": "rg-novatrix-v34",
-  "timeGrain": "Monthly",
-  "timePeriod": { "startDate": "2026-08-01T00:00:00Z", "endDate": "2026-12-31T00:00:00Z" },
-  "notifications": {
-    "actual_GreaterThan_50_Percent": { "threshold": "50.0", "operator": "GreaterThan", "enabled": true, "contactEmails": ["idrisaltun@hotmail.com"] },
-    "actual_GreaterThan_90_Percent": { "threshold": "90.0", "operator": "GreaterThan", "enabled": true, "contactEmails": ["idrisaltun@hotmail.com"] }
-  }
-}
-```
+| Fält | Värde |
+|---|---|
+| Budget | 100 SEK / månad |
+| Omfattning | Resursgrupp `rg-novatrix-v34` |
+| Period | 2026-08-01 – 2026-12-31 |
+| Aktuell förbrukning | 0,0 SEK |
+| Alert 1 | E-post vid **50 %** av budget (> 50 SEK) till `idrisaltun@hotmail.com` |
+| Alert 2 | E-post vid **90 %** av budget (> 90 SEK) till `idrisaltun@hotmail.com` |
 
 Budgeten `bg-rg-novatrixvecka34` är satt till 100 SEK/månad för resursgruppen `rg-novatrix-v34`, med två aktiva mailnotifieringar till `idrisaltun@hotmail.com`: vid 50 % och vid 90 % av budgeten. Aktuell förbrukning vid kontrolltillfället: 0,0 SEK.
 
