@@ -11,7 +11,8 @@ Veckans uppgift gick ut på att sätta upp en virtuell maskin i Azure, versionsh
 ## Kommandon
 
 
-## 
+## Resultat
+
 
 
 
