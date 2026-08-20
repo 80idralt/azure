@@ -58,8 +58,6 @@ Nginx körs och är aktiverat för att starta automatiskt vid omstart.
 
 Verifierade genom att surfa till `http://51.12.243.134` i webbläsaren. Nginx standardsida ("Welcome to nginx!") visades direkt, vilket bekräftar att port 80 redan var öppen i nätverkssäkerhetsgruppen och att webbservern svarar.
 
-![Nginx välkomstsida](images/nginx-welkomstsida.png)
-
 ### 4. Driftsätt kundtjänstsidan
 Skrev kundtjänstsidan (`public/index.html`) med rubrik och ärendeformulär (namn, e-post, meddelande) lokalt, och kopierade sedan filen till servern via `scp`. Flyttade den därefter till Nginx webbrot med `sudo mv`.
 
