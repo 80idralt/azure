@@ -11,31 +11,80 @@ Novatrix AB vill flytta sin kundtjänst till molnet. Den här veckan sätts en v
 ## Genomförande
 
 ### 1. Resursgrupp och VM
-*(fylls i)*
+Skapade resursgruppen och den virtuella maskinen via Azure-portalens guide "Create a virtual machine" (i stället för att skriva CLI-kommandon manuellt skapade guiden en ARM-deployment som skapade resursgrupp, VM, disk, publikt IP, nätverkskort och nätverkssäkerhetsgrupp i ett svep).
 
-### 2. Anslutning via SSH
+- **Resursgrupp:** `rg-novatrix-v34`, region `swedencentral`
+- **VM-namn:** `vm-novatrix-web`
+- **Image:** Ubuntu Server 24.04 LTS (`canonical:ubuntu-24_04-lts:server`)
+- **Storlek:** `Standard_B2ats_v2` — billig burstable ARM-instans, vald med tanke på kostnad eftersom Novatrix inte behöver mer prestanda än så för en enkel kundtjänstsida
+- **Autentisering:** SSH-nyckelpar genererades av portalen under skapandet och laddades ner som `vm-novatrix-web_key.pem`, admin-användare `azureuser-web`
+- **Nätverk:** publikt IP `51.12.243.134`, nätverkssäkerhetsgrupp `vm-novatrix-web-nsg` med inkommande regler för SSH (port 22) och HTTP (port 80)
+
+Verifierade att resurserna skapats korrekt med Azure CLI:
+
+```powershell
+az group list -o table
+az vm list -g rg-novatrix-v34 -d -o table
+az network nsg rule list -g rg-novatrix-v34 --nsg-name vm-novatrix-web-nsg -o table
+```
+
+Resultat: `rg-novatrix-v34` med status `Succeeded`, `vm-novatrix-web` med `PowerState: VM running` och publikt IP `51.12.243.134`, samt NSG-reglerna `SSH` (port 22) och `nginx-allow-http` (port 80) båda satta till `Allow`/`Inbound`.
+
+### 2. Cost management: budget och alerts
+Satte upp en budget på resursgruppsnivå i Azure Portal (Cost Management) för att hålla koll på förbrukningen mot startkrediten.
+
+```powershell
+az consumption budget list -o table
+az consumption budget show --budget-name bg-rg-novatrixvecka34 -o json
+```
+
+Resultat:
+
+```
+Amount    Category    Name                   TimeGrain    ResourceGroup
+--------  ----------  ---------------------  -----------  ---------------
+100.0     Cost        bg-rg-novatrixvecka34  Monthly      rg-novatrix-v34
+```
+
+```json
+{
+  "amount": "100.0",
+  "currentSpend": { "amount": "0.0", "unit": "SEK" },
+  "resourceGroup": "rg-novatrix-v34",
+  "timeGrain": "Monthly",
+  "timePeriod": { "startDate": "2026-08-01T00:00:00Z", "endDate": "2026-12-31T00:00:00Z" },
+  "notifications": {
+    "actual_GreaterThan_50_Percent": { "threshold": "50.0", "operator": "GreaterThan", "enabled": true, "contactEmails": ["idrisaltun@hotmail.com"] },
+    "actual_GreaterThan_90_Percent": { "threshold": "90.0", "operator": "GreaterThan", "enabled": true, "contactEmails": ["idrisaltun@hotmail.com"] }
+  }
+}
+```
+
+Budgeten `bg-rg-novatrixvecka34` är satt till 100 SEK/månad för resursgruppen `rg-novatrix-v34`, med två aktiva mailnotifieringar till `idrisaltun@hotmail.com`: vid 50 % och vid 90 % av budgeten. Aktuell förbrukning vid kontrolltillfället: 0,0 SEK.
+
+### 3. Anslutning via SSH
 Satte behörighet på SSH-nyckeln så att endast min användare kan läsa den. Första försöket gav felet `Bad permissions ... This private key will be ignored` eftersom grupper som `Autentiserade användare` fortfarande hade rättigheter kvar på filen. Löste det genom att nollställa behörigheterna helt innan de sattes om.
 
 ```powershell
-icacls .\vm-novatrix-web_key.pem /reset
-icacls .\vm-novatrix-web_key.pem /inheritance:r
-icacls .\vm-novatrix-web_key.pem /grant:r "$($env:USERNAME):R"
-icacls .\vm-novatrix-web_key.pem
+icacls .\vm-novatrix-web-key.pem /reset
+icacls .\vm-novatrix-web-key.pem /inheritance:r
+icacls .\vm-novatrix-web-key.pem /grant:r "$($env:USERNAME):R"
+icacls .\vm-novatrix-web-key.pem
 ```
 
 ```
-.\vm-novatrix-web_key.pem IDRISDESKTOP\altun:(R)
+.\vm-novatrix-web-key.pem IDRISDESKTOP\altun:(R)
 ```
 
 Anslöt sedan till servern:
 
 ```powershell
-ssh -i .\vm-novatrix-web_key.pem azureuser@51.12.243.134
+ssh -i .\vm-novatrix-web-key.pem azureuser-web@51.12.243.134
 ```
 
-Resultat: Inloggad som `azureuser` på `vm-novatrix-web` (Ubuntu 24.04.4 LTS), prompt `azureuser@vm-novatrix-web:~$`.
+Resultat: Inloggad som `azureuser-web` på `vm-novatrix-web` (Ubuntu 24.04.4 LTS), prompt `azureuser-web@vm-novatrix-web:~$`.
 
-### 3. Installera Nginx
+### 4. Installera Nginx
 Uppdaterade paketlistan och installerade webbservern Nginx.
 
 ```bash
@@ -60,7 +109,7 @@ Verifierade genom att surfa till `http://51.12.243.134` i webbläsaren. Nginx st
 
 ![Nginx välkomstsida](images/nginx-welkomstsida.png)
 
-### 4. Driftsätt kundtjänstsidan
+### 5. Driftsätt kundtjänstsidan
 Skrev kundtjänstsidan (`public/index.html`) med rubrik och ärendeformulär (namn, e-post, meddelande) lokalt, och kopierade sedan filen till servern via `scp`. Flyttade den därefter till Nginx webbrot med `sudo mv`.
 
 ```powershell
@@ -70,7 +119,7 @@ ssh -i E:\MOV25\Uppgifter\Azure\vm-novatrix-web-key.pem azureuser-web@51.12.243.
 
 Resultat: `index.html` flyttad till `/var/www/html/` på servern och ersatte Nginx standardsida.
 
-### 5. Verifiering
+### 6. Verifiering
 Surfade till `http://51.12.243.134` och kontrollerade att Novatrix kundtjänstsida visas med ärendeformuläret (fälten Ditt namn, Din E-post och Meddelande, samt knappen "Skicka ärende").
 
 ![Novatrix kundtjänstsida med ärendeformulär](images/Skarmbild185314.png)
