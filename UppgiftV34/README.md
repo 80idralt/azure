@@ -1,6 +1,6 @@
 # Uppgift V34 - Compute: driftsättning av Novatrix kundtjänst
 
-**Repo:** https://github.com/80idralt/azure/UppgiftV34
+**Repo:** https://github.com/80idralt/azure
 **Namn:** Idris Altun
 **Klass:** MOV25
 **Datum:** 2026-08-20
