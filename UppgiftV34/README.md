@@ -56,6 +56,10 @@ Resultat:
 
 Nginx körs och är aktiverat för att starta automatiskt vid omstart.
 
+Verifierade genom att surfa till `http://51.12.242.137` i webbläsaren. Nginx standardsida ("Welcome to nginx!") visades direkt, vilket bekräftar att port 80 redan var öppen i nätverkssäkerhetsgruppen och att webbservern svarar.
+
+![Nginx välkomstsida](images/nginx-welkomstsida.png)
+
 ### 4. Driftsätt kundtjänstsidan
 *(fylls i)*
 
