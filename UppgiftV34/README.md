@@ -16,7 +16,7 @@ Skapade resursgruppen och den virtuella maskinen via Azure-portalens guide "Crea
 - **Resursgrupp:** `rg-novatrix-v34`, region `swedencentral`
 - **VM-namn:** `vm-novatrix-web`
 - **Image:** Ubuntu Server 24.04 LTS (`canonical:ubuntu-24_04-lts:server`)
-- **Storlek:** `Standard_B2ats_v2` — billig burstable ARM-instans, vald med tanke på kostnad eftersom Novatrix inte behöver mer prestanda än så för en enkel kundtjänstsida
+- **Storlek:** `Standard_B2ats_v2` billig burstable ARM-instans, vald med tanke på kostnad eftersom Novatrix inte behöver mer prestanda än så för en enkel kundtjänstsida
 - **Autentisering:** SSH-nyckelpar genererades av portalen under skapandet och laddades ner som `vm-novatrix-web-key.pem`, admin-användare `azureuser-web`
 - **Nätverk:** publikt IP `51.12.243.134`, nätverkssäkerhetsgrupp `vm-novatrix-web-nsg` med inkommande regler för SSH (port 22) och HTTP (port 80)
 
