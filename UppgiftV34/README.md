@@ -30,7 +30,7 @@ icacls .\vm-novatrix-web_key.pem
 Anslöt sedan till servern:
 
 ```powershell
-ssh -i .\vm-novatrix-web_key.pem azureuser@51.12.242.137
+ssh -i .\vm-novatrix-web_key.pem azureuser@51.12.243.134
 ```
 
 Resultat: Inloggad som `azureuser` på `vm-novatrix-web` (Ubuntu 24.04.4 LTS), prompt `azureuser@vm-novatrix-web:~$`.
@@ -56,7 +56,7 @@ Resultat:
 
 Nginx körs och är aktiverat för att starta automatiskt vid omstart.
 
-Verifierade genom att surfa till `http://51.12.242.137` i webbläsaren. Nginx standardsida ("Welcome to nginx!") visades direkt, vilket bekräftar att port 80 redan var öppen i nätverkssäkerhetsgruppen och att webbservern svarar.
+Verifierade genom att surfa till `http://51.12.243.134` i webbläsaren. Nginx standardsida ("Welcome to nginx!") visades direkt, vilket bekräftar att port 80 redan var öppen i nätverkssäkerhetsgruppen och att webbservern svarar.
 
 ![Nginx välkomstsida](images/nginx-welkomstsida.png)
 
@@ -68,11 +68,12 @@ scp -i E:\MOV25\Uppgifter\Azure\vm-novatrix-web-key.pem -r E:\MOV25\GitHub\azure
 ssh -i E:\MOV25\Uppgifter\Azure\vm-novatrix-web-key.pem azureuser-web@51.12.243.134 "sudo mv ~/index.html /var/www/html/"
 ```
 
-Resultat: *(fylls i — bekräfta att sidan visas på servern)*
+Resultat: `index.html` flyttad till `/var/www/html/` på servern och ersatte Nginx standardsida.
 
 ### 5. Verifiering
-*(fylls i)*
+Surfade till `http://51.12.243.134` och kontrollerade att Novatrix kundtjänstsida visas med ärendeformuläret (fälten Ditt namn, Din E-post och Meddelande, samt knappen "Skicka ärende").
+
+![Novatrix kundtjänstsida med ärendeformulär](images/Skarmbild185314.png)
 
 ## Resultat
-
-
+En Ubuntu-VM (`vm-novatrix-web`) kör Nginx och serverar Novatrix kundtjänstsida med ärendeformulär, nåbar på `http://51.12.243.134`. Koden och dokumentationen ligger versionshanterade i detta repo.
