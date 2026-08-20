@@ -11,7 +11,7 @@ Novatrix AB vill flytta sin kundtjänst till molnet. Den här veckan sätts en v
 ## Genomförande
 
 ### 1. Resursgrupp och VM
-Skapade resursgruppen och den virtuella maskinen via Azure-portalens guide "Create a virtual machine" (i stället för att skriva CLI-kommandon manuellt skapade guiden en ARM-deployment som skapade resursgrupp, VM, disk, publikt IP, nätverkskort och nätverkssäkerhetsgrupp i ett svep).
+Skapade resursgruppen och den virtuella maskinen via Azure-portalens guide "Create a virtual machine".
 
 - **Resursgrupp:** `rg-novatrix-v34`, region `swedencentral`
 - **VM-namn:** `vm-novatrix-web`
@@ -20,31 +20,16 @@ Skapade resursgruppen och den virtuella maskinen via Azure-portalens guide "Crea
 - **Autentisering:** SSH-nyckelpar genererades av portalen under skapandet och laddades ner som `vm-novatrix-web-key.pem`, admin-användare `azureuser-web`
 - **Nätverk:** publikt IP `51.12.243.134`, nätverkssäkerhetsgrupp `vm-novatrix-web-nsg` med inkommande regler för SSH (port 22) och HTTP (port 80)
 
-Verifierade att resurserna skapats korrekt med Azure CLI:
+Verifierade att resurserna skapats korrekt genom att gå igenom dem manuellt i Azure Portal:
 
-```powershell
-az group list -o table
-az vm list -g rg-novatrix-v34 -d -o table
-az network nsg rule list -g rg-novatrix-v34 --nsg-name vm-novatrix-web-nsg -o table
-```
-
-Resultat: `rg-novatrix-v34` med status `Succeeded`, `vm-novatrix-web` med `PowerState: VM running` och publikt IP `51.12.243.134`, samt NSG-reglerna `SSH` (port 22) och `nginx-allow-http` (port 80) båda satta till `Allow`/`Inbound`.
+- **Resursgrupper** → `rg-novatrix-v34` → status `Succeeded`, innehåller VM, disk, nätverkskort, publikt IP och nätverkssäkerhetsgrupp.
+- **vm-novatrix-web** → Overview → Status: `Running`, Public IP address: `51.12.243.134`.
+- **vm-novatrix-web-nsg** → Inbound security rules → `SSH` (port 22) och `nginx-allow-http` (port 80), båda `Allow`.
 
 ### 2. Cost management: budget och alerts
 Satte upp en budget på resursgruppsnivå i Azure Portal (Cost Management) för att hålla koll på förbrukningen mot startkrediten.
 
-```powershell
-az consumption budget list -o table
-az consumption budget show --budget-name bg-rg-novatrixvecka34 -o json
-```
-
-Resultat:
-
-```
-Amount    Category    Name                   TimeGrain    ResourceGroup
---------  ----------  ---------------------  -----------  ---------------
-100.0     Cost        bg-rg-novatrixvecka34  Monthly      rg-novatrix-v34
-```
+Verifierade i Azure Portal under **Cost Management + Billing → Budgets** att budgeten `bg-rg-novatrixvecka34` visas med rätt belopp, omfattning och alert-trösklar:
 
 | Fält | Värde |
 |---|---|
