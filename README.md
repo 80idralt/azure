@@ -7,14 +7,14 @@ Repot innehåller en mapp per vecka.
 Varje veckomapp har en egen README som dokumenterar veckans arbete, med syfte, steg, kommandon och resultat.
 
 ## Innehåll
-- [x] [V34 - Compute](UppgiftV34/); Driftsättning av Novatrix kundtjänst på en virtuell maskin
-- [ ] [V35 - IAM och identitet](UppgiftV35/)
-- [ ] [V36 - Nätverk och säkerhet](UppgiftV36/)
-- [ ] [V37 - Storage](UppgiftV37/)
-- [ ] [V38 - IaC med ARM-templates](UppgiftV38/)
-- [ ] [V39 - Automation och integration](UppgiftV39/)
-- [ ] [V40 - Virtualiseringsnivåer](UppgiftV40/)
-- [ ] [V41](UppgiftV41/)
+- [x] [V34 - Compute](v34/); Driftsättning av Novatrix kundtjänst på en virtuell maskin
+- [ ] [V35 - IAM och identitet](v35/)
+- [ ] [V36 - Nätverk och säkerhet](v36/)
+- [ ] [V37 - Storage](v37/)
+- [ ] [V38 - IaC med ARM-templates](v38/)
+- [ ] [V39 - Automation och integration](v39/)
+- [ ] [V40 - Virtualiseringsnivåer](v40/)
+- [ ] [V41](v41/)
 
 ## Om Novatrix
 
