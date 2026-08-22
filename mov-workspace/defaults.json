@@ -1,0 +1,118 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Arelius-D/MOV-CLI/main/src/mov/data/schema/defaults.schema.json",
+  "location": "swedencentral",
+  "stages": [
+    "preflight",
+    "rg",
+    "cost"
+  ],
+  "cost": {
+    "timeGrain": "Monthly",
+    "thresholds": [
+      {
+        "percent": 50,
+        "type": "Actual",
+        "operator": "GreaterThan"
+      },
+      {
+        "percent": 80,
+        "type": "Actual",
+        "operator": "GreaterThan"
+      },
+      {
+        "percent": 90,
+        "type": "Actual",
+        "operator": "GreaterThan"
+      },
+      {
+        "percent": 100,
+        "type": "Forecasted",
+        "operator": "GreaterThan"
+      }
+    ],
+    "amount": 200,
+    "currency": "SEK",
+    "notify": {
+      "emails": [
+        "idrisaltun@hotmail.com"
+      ]
+    }
+  },
+  "verify": {
+    "httpPath": "/",
+    "expectStatus": 200,
+    "expectText": "Novatrix",
+    "timeoutSeconds": 420,
+    "intervalSeconds": 10
+  },
+  "docs": {
+    "maxOutputLines": 40,
+    "redact": [
+      {
+        "pattern": "(\"customData\"\\s*:\\s*\")[A-Za-z0-9+/=]{40,}",
+        "replacement": "\\1<base64 cloud-init, see cloud-init.yaml>"
+      },
+      {
+        "pattern": "(ssh-(?:rsa|ed25519)\\s+)[A-Za-z0-9+/=]{20,}",
+        "replacement": "\\1<public key>"
+      }
+    ]
+  },
+  "tags": {
+    "env": "${env}",
+    "managedBy": "mov"
+  },
+  "admin": {
+    "sshSource": "*"
+  },
+  "itemDefaults": {
+    "network.subnets": {
+      "private": false
+    },
+    "network.nsg.*": {
+      "direction": "Inbound",
+      "access": "Allow",
+      "protocol": "Tcp",
+      "source": "*",
+      "destination": "*",
+      "ports": [
+        "*"
+      ]
+    },
+    "compute.vms": {
+      "image": "Ubuntu2404",
+      "size": "Standard_B2ts_v2",
+      "publicIp": true,
+      "publicIpSku": "Standard",
+      "publicIpAllocationMethod": "Static",
+      "adminUsername": "azureuser",
+      "osDisk": {
+        "sku": "Standard_LRS"
+      },
+      "ssh": {
+        "mode": "generate",
+        "keyName": "mov25",
+        "keyType": "ed25519"
+      },
+      "host": {
+        "packages": [
+          "git",
+          "nginx"
+        ],
+        "updatePackages": true,
+        "upgradePackages": true,
+        "rebootIfRequired": false
+      },
+      "source": {
+        "repo": "80idralt/azure",
+        "ref": "master",
+        "path": "${env}/public",
+        "bootstrap": "scripts/bootstrap.sh",
+        "auth": "public"
+      }
+    },
+    "storage.containers": {
+      "publicAccess": "None"
+    }
+  }
+}
