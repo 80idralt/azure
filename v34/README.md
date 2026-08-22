@@ -1,8 +1,11 @@
 # Uppgift V34 - Compute: driftsättning av Novatrix kundtjänst
 
 **Repo:** https://github.com/80idralt/azure/tree/master/v34
+
 **Namn:** Idris Altun
+
 **Klass:** MOV25
+
 **Datum:** 2026-08-21
 
 ## Syfte
@@ -106,3 +109,5 @@ Surfade till `http://51.12.243.134` och kontrollerade att Novatrix kundtjänstsi
 
 ## Resultat
 En Ubuntu-VM (`vm-novatrix-web`) kör Nginx och serverar Novatrix kundtjänstsida med ärendeformulär, nåbar på `http://51.12.243.134`. Koden och dokumentationen ligger versionshanterade i detta repo.
+## Utmaning för Väl godkänt (VG)
+Istället för att klicka sig fram servern i portalen (Azure), är det tänkt att hela miljön ska kunna automatiseras, dvs. att allt sätts upp från kod. Detta är beskrivningen för hur det gjordes.
