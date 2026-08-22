@@ -3,7 +3,7 @@
 **Repo:** https://github.com/80idralt/azure/tree/master/v34
 **Namn:** Idris Altun
 **Klass:** MOV25
-**Datum:** 2026-08-20
+**Datum:** 2026-08-21
 
 ## Syfte
 Novatrix AB vill flytta sin kundtjänst till molnet. Den här veckan sätts en virtuell server upp i Azure och en enkel webbsida med ett ärendeformulär (namn, e-post, meddelande) driftsätts på den.
