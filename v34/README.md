@@ -117,6 +117,8 @@ För att visa att jag förstår de bakomliggande koncepten för G-nivån genomf�
 
 Automatiseringen gjordes med `mov`, ett profildrivet CLI som orkesterar en hel Azure-miljö som JSON och driftsätter den med ARM-mallar. Principen är att en profil beskriver *vad* miljön är, medan arbetsytan avgör *var* den hamnar.
 
+![mov cli funktionen och flödet](images/movclipicture.png)
+
 En viktig uppdelning: arbetsytan (`mov-workspace/`) håller konfiguration, state och nycklar, medan repot håller koden som servern hämtar. Servern får aldrig filer uppladdade till sig — den klonar det här repot själv.
 
 ### Konfigurationsfilerna
