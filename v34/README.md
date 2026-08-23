@@ -111,3 +111,80 @@ Surfade till `http://51.12.243.134` och kontrollerade att Novatrix kundtjänstsi
 En Ubuntu-VM (`vm-novatrix-web`) kör Nginx och serverar Novatrix kundtjänstsida med ärendeformulär, nåbar på `http://51.12.243.134`. Koden och dokumentationen ligger versionshanterade i detta repo.
 ## Utmaning för Väl godkänt (VG)
 Istället för att klicka sig fram servern i portalen (Azure), är det tänkt att hela miljön ska kunna automatiseras, dvs. att allt sätts upp från kod. Detta är beskrivningen för hur det gjordes.
+
+### Verktyget: mov CLI
+
+Automatiseringen gjordes med `mov`, ett profildrivet CLI som orkesterar en hel Azure-miljö som JSON och driftsätter den med ARM-mallar. Principen är att en profil beskriver *vad* miljön är, medan arbetsytan avgör *var* den hamnar.
+
+En viktig uppdelning: arbetsytan (`mov-workspace/`) håller konfiguration, state och nycklar, medan repot håller koden som servern hämtar. Servern får aldrig filer uppladdade till sig — den klonar det här repot själv.
+
+### Konfigurationsfilerna
+
+| Fil | Innehåller |
+|---|---|
+| `mov-workspace/mov.workspace.json` | Vilken tenant och subscription miljön hör till |
+| `mov-workspace/naming.json` | Namnmönster, t.ex. `rg-{company}-{env}` med `company: novatrix` |
+| `mov-workspace/defaults.json` | Allt varje miljö ärver: region, budget, VM-storlek, paket, källrepo |
+| `mov-workspace/profiles/v34.json` | Bara det som är unikt för vecka 34 |
+
+Värdena slås ihop i tur och ordning: `defaults.json` → profilen → `itemDefaults` → `${referenser}` → strikt validering. En profil behöver därför bara deklarera sina avvikelser.
+
+### Miljön som kod
+
+Hela vecka 34 beskrivs av `profiles/v34.json`:
+
+```json
+{
+  "env": "v34",
+  "stages": ["preflight", "rg", "network", "cost", "compute", "verify"],
+  "network": {
+    "addressSpace": "10.34.0.0/16",
+    "subnets": [{ "purpose": "web", "prefix": "10.34.1.0/24", "nsg": "web" }],
+    "nsg": {
+      "web": [
+        { "name": "http",  "priority": 100, "ports": ["80"] },
+        { "name": "https", "priority": 110, "ports": ["443"] },
+        { "name": "ssh",   "priority": 120, "ports": ["22"], "source": "${admin.sshSource}" }
+      ]
+    }
+  },
+  "compute": { "vms": [{ "purpose": "web", "subnet": "web" }] }
+}
+```
+
+Allt som inte står här ärvs: Ubuntu 24.04, `Standard_B2ts_v2`, statiskt publikt IP, genererat SSH-nyckelpar, paketen `git` och `nginx`, samt budgeten på 200 SEK/månad med mailvarningar vid 50, 80 och 90 procent av faktisk förbrukning och vid 100 procent av prognosen.
+
+Driftsättningen körs i sex steg, i ordning: `preflight` (kontrollerar verktyg, inloggning, subscription och VM-storlekens tillgänglighet), `rg`, `network`, `cost`, `compute` och `verify`.
+
+### Vad servern kör
+
+`mov` laddar inte upp några filer. Cloud-init skriver `/etc/mov/deploy.env` med variablerna `MOV_ENV`, `MOV_REPO`, `MOV_REF`, `MOV_PATH` och `MOV_APP_DIR`, varefter servern klonar `80idralt/azure` och kör `scripts/bootstrap.sh` som root. Det scriptet läser variablerna och kopierar innehållet i `v34/public/` till webbroten.
+
+Eftersom servern hämtar från GitHub måste ändringar vara pushade innan driftsättning — en lokalt sparad fil når aldrig servern.
+
+### Kommandon
+
+```powershell
+mov check          # kontrollerar verktyg, inloggning och subscription
+mov plan v34       # visar vad som skulle ändras, utan att ändra något
+mov up v34         # driftsätter
+mov status v34     # vad som är driftsatt, VM-status och stegens historik
+mov ssh v34        # ansluter med arbetsytans egen nyckel
+mov stop v34       # deallokerar VM:en, disk och IP finns kvar
+mov start v34      # startar den igen
+mov rebuild v34    # river allt och bygger om från profilen
+mov down v34       # raderar resursgruppen, budgeten och nycklarna
+```
+
+### Resultat
+
+`mov up v34` byggde hela miljön från grunden: resursgrupp `rg-novatrix-v34` i `swedencentral`, virtuellt nätverk `vnet-novatrix`, säkerhetsgrupp `nsg-novatrix-web`, publikt IP, nätverkskort och VM:en `vm-novatrix-web`, samt budgeten `budget-novatrix-v34`.
+
+Sista steget `verify` bekräftade automatiskt att sidan svarar innan körningen räknades som lyckad:
+
+```
+6/6 verify Prove the deployment answers
+     OK   web: http://20.240.42.223/ -> 200 in 60s
+```
+
+Verifieringen kontrollerar att servern svarar med HTTP 200 och att sidan innehåller texten "Novatrix", med upp till 420 sekunders väntan medan servern startar och installerar sig själv. Hela miljön kan därmed rivas och byggas om identiskt med ett enda kommando, utan ett enda klick i portalen.
