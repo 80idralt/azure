@@ -94,6 +94,16 @@ Verifierade genom att surfa till `http://51.12.243.134` i webbläsaren. Nginx st
 
 ### 5. Driftsätt kundtjänstsidan
 Skrev kundtjänstsidan (`public/index.html`) med rubrik och ärendeformulär (namn, e-post, meddelande) lokalt, och kopierade sedan filen till servern via `scp`. Flyttade den därefter till Nginx webbrot med `sudo mv`.
+#### Webbapplikation 
+
+Som en del av infrastrukturen driftsätts en enkel kundtjänstportal för Novatrix. Filen `index.html` innehåller sidans struktur och design (HTML/CSS) och fungerar som ett proof-of-concept för webbservern.
+
+**Funktioner:**
+*   **Responsiv design:** Sidan är anpassad för att se bra ut på både desktop och mobila enheter.
+*   **Inbäddad CSS:** All styling hanteras i samma fil för att minimera antalet anrop och förenkla driftsättningen i denna labb-miljö.
+
+**Arkitektur:**
+Webbsidan hämtas automatiskt från detta repository i samband med att den virtuella maskinen skapas, och serveras sedan med hjälp av Nginx på port 80.
 
 ```powershell
 scp -i E:\MOV25\Uppgifter\Azure\vm-novatrix-web-key.pem -r E:\MOV25\GitHub\azure\v34\public\* azureuser-web@51.12.243.134:~/
@@ -115,7 +125,7 @@ För att visa att jag förstår de bakomliggande koncepten för G-nivån genomf�
 
 ### Verktyget: mov CLI
 
-Automatiseringen gjordes med `mov`, ett profildrivet CLI som orkesterar en hel Azure-miljö som JSON och driftsätter den med ARM-mallar. Principen är att en profil beskriver *vad* miljön är, medan arbetsytan avgör *var* den hamnar.
+Automatiseringen gjordes med `mov CLI`, ett profildrivet CLI som orkesterar en hel Azure-miljö som JSON och driftsätter den med ARM-mallar. Principen är att en profil beskriver *vad* miljön är, medan arbetsytan avgör *var* den hamnar.
 
 ![mov cli funktionen och flödet](images/movclipicture.png)
 
