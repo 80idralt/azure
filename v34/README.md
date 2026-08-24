@@ -107,6 +107,7 @@ Webbsidan hämtas automatiskt från detta repository i samband med att den virtu
 
 ```powershell
 scp -i E:\MOV25\Uppgifter\Azure\vm-novatrix-web-key.pem -r E:\MOV25\GitHub\azure\v34\public\* azureuser-web@51.12.243.134:~/
+
 ssh -i E:\MOV25\Uppgifter\Azure\vm-novatrix-web-key.pem azureuser-web@51.12.243.134 "sudo mv ~/index.html /var/www/html/"
 ```
 
