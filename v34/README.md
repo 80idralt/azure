@@ -215,7 +215,7 @@ Sista steget `verify` bekräftade automatiskt att sidan svarar innan körningen 
      OK   web: http://20.240.42.223/ -> 200 in 60s
 ```
 
-Verifieringen kontrollerar att servern svarar med HTTP 200 och att sidan innehåller texten "Novatrix", med upp till 420 sekunders väntan medan servern startar och installerar sig själv. Hela miljön kan därmed rivas och byggas om identiskt med ett enda kommando, utan ett enda klick i portalen.
+Verifieringen kontrollerar att servern svarar med HTTP 200 och att sidan innehåller texten "Novatrix", med upp till 420 sekunders väntan medan servern startar och installerar sig själv. Samma sak kan kontrolleras för hand med curl -I http://20.240.42.223/, där -I hämtar bara svarshuvudet. Kommer 200 OK tillbaka har servern tagit emot förfrågan och hittat sidan. Hela miljön kan därmed rivas och byggas om identiskt med ett enda kommando, utan ett enda klick i portalen
 ### Alternativ lösning
 
 Dessutom byggde jag en alternativ lösning för denna veckas uppgift. Skripten och dokumentationen för den ligger i mappen [alternativ_losning/Vecka34](alternativ_losning/Vecka34).
