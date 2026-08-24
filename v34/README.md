@@ -132,10 +132,10 @@ Surfade till `http://51.12.243.134` och kontrollerade att Novatrix kundtjänstsi
 
 ![Novatrix kundtjänstsida med ärendeformulär](images/Skarmbild185314.png)
 
-## Resultat
+## 7. Resultat
 En Ubuntu-VM (`vm-novatrix-web`) kör Nginx och serverar Novatrix kundtjänstsida med ärendeformulär, nåbar på `http://51.12.243.134`. Koden och dokumentationen ligger versionshanterade i detta repo.
 
-## Utmaning för Väl godkänt (VG)
+## 8. Utmaning för Väl godkänt (VG)
 För att visa att jag förstår de bakomliggande koncepten för G-nivån genomförde jag först uppgiften manuellt enligt stegen ovan. För att uppnå VG-kravet rev jag sedan ner miljön och byggde upp den helt från grunden med kod och automatisering (IaC), där jag slipper klicka i portalen.
 
 ### Verktyget: mov CLI
