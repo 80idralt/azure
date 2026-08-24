@@ -43,7 +43,7 @@ Verifierade i Azure Portal under **Cost Management + Billing → Budgets** att b
 | Alert 1 | E-post vid **50 %** av budget (> 50 SEK) till `adrs1@hotmail.com` |
 | Alert 2 | E-post vid **90 %** av budget (> 90 SEK) till `adrs2@hotmail.com` |
 
-Budgeten `bg-rg-novatrixvecka34` är satt till 100 SEK/månad för resursgruppen `rg-novatrix-v34`, med två aktiva mailnotifieringar till `idrisaltun@hotmail.com`: vid 50 % och vid 90 % av budgeten. Aktuell förbrukning vid kontrolltillfället: 0,0 SEK.
+Budgeten `bg-rg-novatrixvecka34` är satt till 100 SEK/månad för resursgruppen `rg-novatrix-v34`, med två aktiva mailnotifieringar till `adrs1@hotmail.com`: vid 50 % och vid 90 % av budgeten. Aktuell förbrukning vid kontrolltillfället: 0,0 SEK.
 
 ### 3. Anslutning via SSH
 Satte behörighet på SSH-nyckeln så att endast min användare kan läsa den. Första försöket gav felet `Bad permissions ... This private key will be ignored` eftersom grupper som `Autentiserade användare` fortfarande hade rättigheter kvar på filen. Löste det genom att nollställa behörigheterna helt innan de sattes om.
