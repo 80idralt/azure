@@ -40,8 +40,8 @@ Verifierade i Azure Portal under **Cost Management + Billing → Budgets** att b
 | Omfattning | Resursgrupp `rg-novatrix-v34` |
 | Period | 2026-08-01 – 2026-12-31 |
 | Aktuell förbrukning | 0,0 SEK |
-| Alert 1 | E-post vid **50 %** av budget (> 50 SEK) till `idrisaltun@hotmail.com` |
-| Alert 2 | E-post vid **90 %** av budget (> 90 SEK) till `idrisaltun@hotmail.com` |
+| Alert 1 | E-post vid **50 %** av budget (> 50 SEK) till `adrs1@hotmail.com` |
+| Alert 2 | E-post vid **90 %** av budget (> 90 SEK) till `adrs2@hotmail.com` |
 
 Budgeten `bg-rg-novatrixvecka34` är satt till 100 SEK/månad för resursgruppen `rg-novatrix-v34`, med två aktiva mailnotifieringar till `idrisaltun@hotmail.com`: vid 50 % och vid 90 % av budgeten. Aktuell förbrukning vid kontrolltillfället: 0,0 SEK.
 
@@ -71,9 +71,23 @@ Resultat: Inloggad som `azureuser-web` på `vm-novatrix-web` (Ubuntu 24.04.4 LTS
 Uppdaterade paketlistan och installerade webbservern Nginx.
 
 ```bash
+# Uppdatera paketlistorna
 sudo apt update
+
+# Uppgradera befintliga paket (från din första rad)
+sudo apt upgrade -y
+
+# Installera Nginx
 sudo apt install nginx -y
-systemctl status nginx
+
+# Se till att Nginx startar automatiskt vid omstart av servern
+sudo systemctl enable nginx
+
+# Starta Nginx-tjänsten (om den inte redan startade automatiskt vid installationen)
+sudo systemctl start nginx
+
+# Kontrollera statusen för att se att allt körs som det ska
+sudo systemctl status nginx
 ```
 
 Resultat:
@@ -130,7 +144,7 @@ Automatiseringen gjordes med `mov CLI`, ett profildrivet CLI som orkesterar en h
 
 ![mov cli funktionen och flödet](images/movclipicture.png)
 
-En viktig uppdelning: arbetsytan (`mov-workspace/`) håller konfiguration, state och nycklar, medan repot håller koden som servern hämtar. Servern får aldrig filer uppladdade till sig — den klonar det här repot själv.
+En viktig uppdelning: arbetsytan (`mov-workspace/`) håller konfiguration, state och nycklar, medan repot håller koden som servern hämtar. Servern får aldrig filer uppladdade till sig den klonar det här repot själv.
 
 ### Konfigurationsfilerna
 
@@ -174,7 +188,7 @@ Driftsättningen körs i sex steg, i ordning: `preflight` (kontrollerar verktyg,
 
 `mov` laddar inte upp några filer. Cloud-init skriver `/etc/mov/deploy.env` med variablerna `MOV_ENV`, `MOV_REPO`, `MOV_REF`, `MOV_PATH` och `MOV_APP_DIR`, varefter servern klonar `80idralt/azure` och kör `scripts/bootstrap.sh` som root. Det scriptet läser variablerna och kopierar innehållet i `v34/public/` till webbroten.
 
-Eftersom servern hämtar från GitHub måste ändringar vara pushade innan driftsättning — en lokalt sparad fil når aldrig servern.
+Eftersom servern hämtar från GitHub måste ändringar vara pushade innan driftsättning en lokalt sparad fil når aldrig servern.
 
 ### Kommandon
 
@@ -206,7 +220,6 @@ Verifieringen kontrollerar att servern svarar med HTTP 200 och att sidan innehå
 
 Dessutom byggde jag en alternativ lösning för denna veckas uppgift. Skripten och dokumentationen för den ligger i mappen [alternativ_losning/Vecka34](alternativ_losning/Vecka34).
 
-För att uppnå VG-kravet rev jag sedan ner miljön och byggde upp den helt från grunden med kod och automatisering (IaC), så hela lösningen kan återskapas från repot utan manuella steg i portalen.
 
 Automatiseringen är byggd helt utan externa verktyg för att hålla nere komplexiteten, och använder sig exklusivt av Azure CLI-skript (PowerShell) och `cloud-init`.
 
@@ -217,7 +230,7 @@ Automatiseringen är byggd helt utan externa verktyg för att hålla nere komple
 *   **`destroy.ps1`** - Städskript som med ett kommando raderar hela resursgruppen i bakgrunden (`--no-wait`). Möjliggör ett kostnadsmedvetet arbetssätt där miljön snabbt rivs ner när dagen är slut.
 
 ### Vad servern kör
-Inga filer laddas upp från den lokala datorn under körning. Istället bygger min lokala dator infrastrukturen, varpå den nya servern automatiskt klonar källkoden (`80idralt/azure`) direkt från GitHub via instruktionerna i `cloud-init.yaml`. Eftersom servern hämtar koden från GitHub måste ändringar vara pushade innan driftsättning.
+Inga filer laddas upp från den lokala datorn under körning. Istället bygger min lokala dator infrastrukturen, varpå den nya servern automatiskt klonar källkoden ([`80idralt/azure`](https://github.com/80idralt/azure)) direkt från GitHub via instruktionerna i `cloud-init.yaml`. Eftersom servern hämtar koden från GitHub måste ändringar vara pushade innan driftsättning.
 
 ### Kommandon för att köra miljön
 
@@ -234,7 +247,7 @@ När `deploy.ps1` är färdigt tar det cirka en minut för `cloud-init` att inst
 Kontroll av tjänstens status på servern:
 
 ```bash
-systemctl status nginx
+sudo systemctl status nginx
 ``` 
 
 **Terminalutskrift:**
