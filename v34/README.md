@@ -202,3 +202,56 @@ Sista steget `verify` bekräftade automatiskt att sidan svarar innan körningen 
 ```
 
 Verifieringen kontrollerar att servern svarar med HTTP 200 och att sidan innehåller texten "Novatrix", med upp till 420 sekunders väntan medan servern startar och installerar sig själv. Hela miljön kan därmed rivas och byggas om identiskt med ett enda kommando, utan ett enda klick i portalen.
+### Alternativ lösning
+
+Dessutom byggde jag en alternativ lösning för denna veckas uppgift. Skripten och dokumentationen för den ligger i mappen [alternativ_losning/Vecka34](alternativ_losning/Vecka34).
+
+För att uppnå VG-kravet rev jag sedan ner miljön och byggde upp den helt från grunden med kod och automatisering (IaC), så hela lösningen kan återskapas från repot utan manuella steg i portalen.
+
+Automatiseringen är byggd helt utan externa verktyg för att hålla nere komplexiteten, och använder sig exklusivt av Azure CLI-skript (PowerShell) och `cloud-init`.
+
+### Konfigurationsfilerna (Filstruktur)
+
+*   **`deploy.ps1`** - Huvudskriptet som skapar resursgruppen och provisionerar VM:en (`Standard_B2ats_v2`). Skriptet öppnar även port 80 och returnerar den genererade publika IP-adressen.
+*   **`cloud-init.yaml`** - Skickas med som custom-data vid VM-skapandet. När servern startar kör den automatiskt paketuppdateringar, installerar Nginx och Git, klonar detta repo, och placerar webbsidan i `/var/www/html/`.
+*   **`destroy.ps1`** - Städskript som med ett kommando raderar hela resursgruppen i bakgrunden (`--no-wait`). Möjliggör ett kostnadsmedvetet arbetssätt där miljön snabbt rivs ner när dagen är slut.
+
+### Vad servern kör
+Inga filer laddas upp från den lokala datorn under körning. Istället bygger min lokala dator infrastrukturen, varpå den nya servern automatiskt klonar källkoden (`80idralt/azure`) direkt från GitHub via instruktionerna i `cloud-init.yaml`. Eftersom servern hämtar koden från GitHub måste ändringar vara pushade innan driftsättning.
+
+### Kommandon för att köra miljön
+
+```powershell
+az login       # Loggar in i Azure
+./deploy.ps1   # Driftsätter hela miljön och returnerar IP-adressen
+./destroy.ps1  # Raderar miljön i bakgrunden för att spara pengar
+```
+
+### Verifiering server
+
+När `deploy.ps1` är färdigt tar det cirka en minut för `cloud-init` att installera Nginx och hämta koden, därefter finns Novatrix-sidan live och serveras dynamiskt från detta arkiv. Hela miljön kan därmed rivas och byggas om identiskt med ett enda kommando, utan ett enda klick i portalen.
+
+Kontroll av tjänstens status på servern:
+
+```bash
+systemctl status nginx
+``` 
+
+**Terminalutskrift:**
+
+```text
+● nginx.service - A high performance web server and a reverse proxy server
+     Loaded: loaded (/usr/lib/systemd/system/nginx.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2026-08-24 10:42:35 UTC; 4min 31s ago
+       Docs: man:nginx(8)
+    Process: 8497 ExecStartPre=/usr/sbin/nginx -t -q -g daemon on; master_process on; (code=exited, status=0/SUCCESS)
+    Process: 8498 ExecStart=/usr/sbin/nginx -g daemon on; master_process on; (code=exited, status=0/SUCCESS)
+   Main PID: 8500 (nginx)
+      Tasks: 3 (limit: 1045)
+     Memory: 2.3M (peak: 2.6M)
+        CPU: 18ms
+     CGroup: /system.slice/nginx.service
+             ├─8500 "nginx: master process /usr/sbin/nginx -g daemon on; master_process on;"
+             ├─8501 "nginx: worker process"
+             └─8502 "nginx: worker process"
+```
