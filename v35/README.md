@@ -11,7 +11,7 @@
 ## Syfte
 Novatrix har sedan v34 en server i Azure. Nu ska jag bestämma vem som får göra vad med den. Driften behöver kunna sköta servern, utvecklarna behöver bara kunna titta. Ingen ska ha mer behörighet än den behöver för sitt jobb.
 
-Jag har gjort hela den här uppgiften för hand i Azure Portal.
+Grunduppgiften gjorde jag för hand i Azure Portal. VG-delen längst ner byggde jag med kod i stället.
 
 ## Utgångsläge
 Jag bygger vidare på miljön från v34:
@@ -54,6 +54,8 @@ Så här ser det ut i **Access control (IAM) -> Role assignments** på resursgru
 ![Rolltilldelningarna på rg-novatrix-v34](images/accesskontrol.png)
 
 Två saker syns i listan. **Type** säger `Group`, alltså ligger behörigheten på grupperna och inte på personerna. Och **Scope** säger `This resource`, medan mitt eget Owner står som `Subscription (Inherited)`. Det är skillnaden mellan en behörighet som bara gäller den här miljön och en som ärvs uppifrån.
+
+Bilden visar de två roller jag satte manuellt. Modellen byggdes senare ut till sex, vilket står under VG längre ner.
 
 **Varför resursgruppen och inte hela prenumerationen:** roller ärvs nedåt i Azure. Hade jag lagt dem på prenumerationen skulle de gälla varje ny resursgrupp jag skapar resten av kursen. Nu gäller de bara Novatrix miljö.
 
@@ -175,7 +177,7 @@ Jag byggde ut modellen från två roller till sex, en per funktion på företage
 | Azure-Natverk | Network Contributor | Allt som rör nätverk: virtuella nätverk, undernät, NSG-regler och IP-adresser. Inget på servrar | Den som öppnar och stänger portar ska inte kunna radera servern på köpet |
 | Azure-Backup | Backup Operator | Sköta säkerhetskopiering och återställning, men inte ta bort säkerhetskopior eller skapa valv | Backup är en egen uppgift. Den som kör den behöver inte kunna förvalta servrarna |
 | Azure-Support | Reader | Bara läsa | Novatrix är en kundtjänst. Supporten måste kunna se om servern är uppe när kunder ringer, men aldrig röra den |
-| Azure-Ekonomi | Cost Management Reader | Läsa kostnader, budgetar och prognoser. Kommer inte åt en enda resurs | Ekonomi ska följa förbrukningen mot budgeten från v34, ingenting annat |
+| Azure-Ekonomi | Cost Management Reader | Läsa kostnader, budgetar och prognoser. Ser inte innehållet i resurserna | Ekonomi ska följa förbrukningen mot budgeten från v34, ingenting annat |
 
 Varje roll är vald efter frågan **vad är minsta roll som räcker för det här jobbet**. Ingen har fått något "för säkerhets skull".
 
@@ -209,9 +211,7 @@ Därför stannar Owner hos mitt administratörskonto. Driften kan bygga och riva
 
 ### Rolltilldelningarna som kod
 
-Portalen är bra för att förstå vad som händer, men det man klickar fram går inte att göra om exakt likadant, och det syns inte i repot vad någon ändrat. Därför ligger hela behörighetsmodellen som ett skript i veckans mapp.
-
-Hela filen ligger i veckans mapp: **[rbac-novatrix.sh](rbac-novatrix.sh)**. Varje tilldelning är en rad som ser ut så här:
+Portalen är bra för att förstå vad som händer, men det man klickar fram går inte att göra om exakt likadant, och det syns inte i repot vad någon ändrat. Därför ligger rolltilldelningarna som ett skript i veckans mapp: **[rbac-novatrix.sh](rbac-novatrix.sh)**. Varje tilldelning är en rad som ser ut så här:
 
 ```bash
 az role assignment create --assignee $DRIFT --role "Contributor" --scope $RG
@@ -220,6 +220,8 @@ az role assignment create --assignee $DRIFT --role "Contributor" --scope $RG
 **Så fungerar den.** Första halvan hämtar id till variabler. Inget id är skrivet för hand i filen — resursgruppens fullständiga id hämtas med `az group show`, och varje grupps id med `az ad group show`. Andra halvan är en rad per roll, och varje rad består av samma tre delar som i portalen: `--assignee` är vem, `--role` är vad, `--scope` är var.
 
 Att inga id står i filen betyder att den fungerar i vilken prenumeration som helst. Byter man arbetsplats eller bygger om miljön hämtas de nya värdena automatiskt.
+
+**Vad skriptet inte gör.** Det skapar inte grupperna. De ligger i Entra ID och skapas där, precis som i grunduppgiften. Det uppgiften vill se i kod är rolltilldelningarna, alltså kopplingen mellan grupp, roll och resursgrupp, och det är den delen filen bygger upp från noll.
 
 ### Att kunna riva är lika viktigt
 
@@ -253,6 +255,8 @@ Azure-Utveckling  Group  Reader
 ```
 
 Sex tilldelningar, alla med `Typ: Group` och alla på resursgruppen. Grupperna och användarna rördes aldrig under rivningen, bara kopplingen mellan dem och resursgruppen. Det är skillnaden mellan identitet och behörighet i praktiken.
+
+De fyra nya grupperna har inga medlemmar än, så de går inte att inloggningstesta som jag gjorde med Erik och Anna. De är förberedda för de funktioner Novatrix faktiskt anställer till, och tilldelningarna är kontrollerade i listan ovan.
 
 ### En fallgrop jag fastnade i
 
