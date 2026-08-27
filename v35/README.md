@@ -256,7 +256,7 @@ Azure-Utveckling  Group  Reader
 
 Sex tilldelningar, alla med `Typ: Group` och alla på resursgruppen. Grupperna och användarna rördes aldrig under rivningen, bara kopplingen mellan dem och resursgruppen. Det är skillnaden mellan identitet och behörighet i praktiken.
 
-De fyra nya grupperna har inga medlemmar än, så de går inte att inloggningstesta som jag gjorde med Erik och Anna. De är förberedda för de funktioner Novatrix faktiskt anställer till, och tilldelningarna är kontrollerade i listan ovan.
+Azure-Natverk, Azure-Backup och Azure-Support har inga medlemmar än, så de går inte att inloggningstesta som jag gjorde med Erik och Anna. De är förberedda för de funktioner Novatrix faktiskt anställer till, och tilldelningarna är kontrollerade i listan ovan. Ekonomirollen testade jag däremot på riktigt, se nedan.
 
 ### En fallgrop jag fastnade i
 
@@ -277,6 +277,34 @@ export MSYS_NO_PATHCONV=1
 ```
 
 Den stänger av översättningen. På riktig Linux, till exempel i Azure Cloud Shell, finns ingen sådan variabel och raden ignoreras. Filerna fungerar därför på båda ställena.
+
+### Ekonomirollen testad på riktigt
+
+För att kunna testa ekonomirollen skapade jag användaren `ekonomi-linda@idrisaltun2029hotmail.onmicrosoft.com` och la henne i `Azure-Ekonomi`. Sen loggade jag in som henne i ett inkognitofönster.
+
+**Hon ser kostnaderna.** Kostnadsanalysen öppnades med omfånget satt till `rg-novatrix-v34`. Grafen är tom, men det beror på att servern stått avstängd och att ingen kostnad rapporterats än, inte på behörigheten.
+
+![Linda ser kostnadsanalysen för resursgruppen](images/lindakostnadsanalys.png)
+
+**Här hittade jag ett fel i min egen uppsättning.** Rutan uppe till höger sa **Budget: INGET**, trots att jag satte upp en budget redan i v34. Den låg nämligen på prenumerationen:
+
+```
+/subscriptions/f531c946-.../budgets/MOV25-Budget
+```
+
+Lindas roll slutar vid resursgruppen, så hon nådde aldrig budgeten hon skulle följa kostnaderna mot.
+
+Det enkla hade varit att ge henne Cost Management Reader på prenumerationen i stället. Jag gjorde tvärtom och skapade en ny budget på resursgruppen, `budget-rg-novatrix-v34` på 100 SEK i månaden. Då hamnade det hon ska titta på inom hennes befintliga behörighet, i stället för att behörigheten breddades för att nå det.
+
+![Linda ser budgeten på resursgruppen](images/lindabudget.png)
+
+**Och hon får inte ändra något.** Knappen Lägg till syns i budgetvyn, men när jag försökte skapa en budget som Linda nekade Azure.
+
+![Linda nekas skapa en budget](images/lindanekadbudget.png)
+
+Två olika fel dök upp under samma session, och skillnaden mellan dem är värd att notera. Prognosen i kostnadsvyn föll på `BadRequest — Invalid query definition`, alltså ett tekniskt fel: det fanns ingen kostnadshistorik att räkna prognos på. Budgetförsöket föll på `does not have authorization to perform action`, alltså ett behörighetsfel. Det ena betyder att det inte gick, det andra att hon inte fick.
+
+Därmed är ekonomirollen bevisad från tre håll: hon ser kostnaderna, hon ser budgeten, och hon kan inte ändra någonting.
 
 ### Hur modellen skalar
 
