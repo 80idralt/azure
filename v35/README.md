@@ -211,43 +211,10 @@ Därför stannar Owner hos mitt administratörskonto. Driften kan bygga och riva
 
 Portalen är bra för att förstå vad som händer, men det man klickar fram går inte att göra om exakt likadant, och det syns inte i repot vad någon ändrat. Därför ligger hela behörighetsmodellen som ett skript i veckans mapp.
 
-`rbac-novatrix.sh`:
+Hela filen ligger i veckans mapp: **[rbac-novatrix.sh](rbac-novatrix.sh)**. Varje tilldelning är en rad som ser ut så här:
 
 ```bash
-#!/bin/bash
-#Novatrix rolltilldelningar som kod - v35
-
-#Git Bash gör om sökvägar som börjar med / till Windows-sökvägar.
-#Raden nedan stänger av det, så att --scope skickas oförändrat till Azure.
-export MSYS_NO_PATHCONV=1
-
-#Hämta id till variabler
-RG=$(az group show --name rg-novatrix-v34 --query id -o tsv)
-
-DRIFT=$(az ad group show --group "Azure-Drift" --query id -o tsv)
-UTV=$(az ad group show --group "Azure-Utveckling" --query id -o tsv)
-EKON=$(az ad group show --group "Azure-Ekonomi" --query id -o tsv)
-NAT=$(az ad group show --group "Azure-Natverk" --query id -o tsv)
-SUPP=$(az ad group show --group "Azure-Support" --query id -o tsv)
-BACKUP=$(az ad group show --group "Azure-Backup" --query id -o tsv)
-
-#Tilldela roll till gruppen Azure-Drift
 az role assignment create --assignee $DRIFT --role "Contributor" --scope $RG
-
-#Tilldela roll till gruppen Azure-Utveckling
-az role assignment create --assignee $UTV --role "Reader" --scope $RG
-
-#Tilldela roll till gruppen Azure-Ekonomi
-az role assignment create --assignee $EKON --role "Cost Management Reader" --scope $RG
-
-#Tilldela roll till gruppen Azure-Natverk
-az role assignment create --assignee $NAT --role "Network Contributor" --scope $RG
-
-#Tilldela roll till gruppen Azure-Support
-az role assignment create --assignee $SUPP --role "Reader" --scope $RG
-
-#Tilldela roll till gruppen Azure-Backup
-az role assignment create --assignee $BACKUP --role "Backup Operator" --scope $RG
 ```
 
 **Så fungerar den.** Första halvan hämtar id till variabler. Inget id är skrivet för hand i filen — resursgruppens fullständiga id hämtas med `az group show`, och varje grupps id med `az ad group show`. Andra halvan är en rad per roll, och varje rad består av samma tre delar som i portalen: `--assignee` är vem, `--role` är vad, `--scope` är var.
@@ -256,31 +223,10 @@ Att inga id står i filen betyder att den fungerar i vilken prenumeration som he
 
 ### Att kunna riva är lika viktigt
 
-`rbac-novatrix-delete.sh` tar bort samma sex tilldelningar. Den är byggd som en spegelbild av den första:
+**[rbac-novatrix-delete.sh](rbac-novatrix-delete.sh)** tar bort samma sex tilldelningar och är byggd som en spegelbild av den första. Enda skillnaden är ordet `delete` i stället för `create`:
 
 ```bash
-#!/bin/bash
-#Novatrix - ta bort rolltilldelningarna - v35
-
-export MSYS_NO_PATHCONV=1
-
-#Hämta id till variabler
-RG=$(az group show --name rg-novatrix-v34 --query id -o tsv)
-
-DRIFT=$(az ad group show --group "Azure-Drift" --query id -o tsv)
-UTV=$(az ad group show --group "Azure-Utveckling" --query id -o tsv)
-EKON=$(az ad group show --group "Azure-Ekonomi" --query id -o tsv)
-NAT=$(az ad group show --group "Azure-Natverk" --query id -o tsv)
-SUPP=$(az ad group show --group "Azure-Support" --query id -o tsv)
-BACKUP=$(az ad group show --group "Azure-Backup" --query id -o tsv)
-
-#Ta bort tilldelningarna
 az role assignment delete --assignee $DRIFT --role "Contributor" --scope $RG
-az role assignment delete --assignee $UTV --role "Reader" --scope $RG
-az role assignment delete --assignee $EKON --role "Cost Management Reader" --scope $RG
-az role assignment delete --assignee $NAT --role "Network Contributor" --scope $RG
-az role assignment delete --assignee $SUPP --role "Reader" --scope $RG
-az role assignment delete --assignee $BACKUP --role "Backup Operator" --scope $RG
 ```
 
 Regeln att komma ihåg: create och delete måste ha **samma tre delar**. Skiljer sig `--assignee`, `--role` eller `--scope` det minsta tas ingenting bort, och kommandot säger inte alltid ifrån.
