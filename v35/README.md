@@ -146,21 +146,16 @@ Till sist startade jag servern igen som Anna, så att miljön var tillbaka som d
 
 ![Anna startar servern igen](images/annamaskinstartat.png)
 
-### Skillnaden mellan rollerna
-
-| | Erik, Reader | Anna, Contributor |
-|---|---|---|
-| Se resursgruppen och VM:en | Ja | Ja |
-| Stoppa och starta servern | Nej, nekades | Ja |
-| Se prenumerationens krediter | Nej | Nej |
-
 ## Resultat
 
-| Vem | Vad de får göra | Var |
-|---|---|---|
-| Anna Drift, via Azure-Drift | Contributor, sköta hela miljön men inte dela ut behörigheter | `rg-novatrix-v34` |
-| Erik Utveckling, via Azure-Utveckling | Reader, bara titta | `rg-novatrix-v34` |
-| Jag själv, admin | Owner | Prenumerationen |
+| | Erik, via Azure-Utveckling | Anna, via Azure-Drift | Jag själv, admin |
+|---|---|---|---|
+| Roll | Reader | Contributor | Owner |
+| Var | `rg-novatrix-v34` | `rg-novatrix-v34` | Prenumerationen |
+| Se resursgruppen och VM:en | Ja | Ja | Ja |
+| Stoppa och starta servern | Nej, nekades | Ja | Ja |
+| Dela ut behörigheter | Nej | Nej | Ja |
+| Se prenumerationens krediter | Nej | Nej | Ja |
 
 Ingen har behörighet direkt på sitt konto, ingen roll sträcker sig utanför resursgruppen, och rätten att dela ut åtkomst har bara jag. Och det är verifierat på riktigt, inte bara inställt.
 
