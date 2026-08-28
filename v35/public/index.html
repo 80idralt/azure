@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Novatrix - Kundsupport</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #eceff1;
+            margin: 50px;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            max-width: 500px;
+            margin: 0 auto;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #37474f;
+        }
+        label {
+            font-weight: bold;
+            color: #455a64;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0 15px 0;
+            border: 1px solid #cfd8dc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Ser till att padding inte spräcker bredden */
+        }
+        button {
+            background-color: #455a64;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #37474f;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Novatrix</h1>
+        <p>Välkommen till Novatrix. Var vänligen använd formuläret nedan för att skapa ett ärende eller kontakta oss.</p>
+        <br>
+        
+        <!-- Formuläret skickar ingen data i det här skedet (action="#") -->
+        <form action="#" method="POST">
+            <label for="name">Ditt namn:</label><br>
+            <input type="text" id="name" name="name" required>
+            <br>
+            
+            <label for="email">Din E-post:</label><br>
+            <input type="email" id="email" name="email" required>
+            <br>
+            
+            <label for="message">Meddelande:</label><br>
+            <textarea id="message" name="message" rows="5" required></textarea>
+            <br>
+            
+            <button type="submit">Skicka ärende</button>
+        </form>
+    </div>
+
+</body>
+</html>
