@@ -19,6 +19,8 @@ Jag bygger vidare på miljön från v34:
 - Resursgrupp: `rg-novatrix-v34` i `swedencentral`
 - I den ligger `vm-novatrix-web` med disk, nätverkskort, nätverk, publikt IP och NSG
 
+Skripten som bygger den miljön ligger i [scripts/](scripts/), kopierade hit från v34 så att hela veckan går att återskapa från den här mappen. `deploy.ps1` skapar resursgruppen och servern, `cloud-init.yaml` installerar Nginx och hämtar webbsidan vid uppstart, och `destroy.ps1` river allt igen. Själva sidan ligger i [public/](public/).
+
 ## Vad jag gjorde
 
 ### 1. Skapade två användare
@@ -126,13 +128,13 @@ Att rolltilldelningen syns i portalen bevisar bara att jag gjort den, inte att d
 
 ![Erik nekas att stoppa den virtuella datorn](images/eriknekad125317.png)
 
-Tillsammans är de två bilderna beviset: Erik kan se miljön men inte röra den. Att knapparna går att klicka på spelar ingen roll, för behörigheten kontrolleras när åtgärden körs, inte av vad portalen visar.
+Tillsammans är de två bilderna beviset: Erik ser miljön men kan inte röra den. Att knappen går att klicka på spelar ingen roll, behörigheten kontrolleras först när åtgärden körs.
 
 ### Anna med Contributor kan det Erik inte kan
 
 Sen gjorde jag samma test med Anna, för att se att skillnaden mellan rollerna faktiskt märks. Jag loggade in som `drift-anna@idrisaltun2029hotmail.onmicrosoft.com` i ett eget inkognitofönster.
 
-Redan på startsidan dök något intressant upp. Anna får samma varning som Erik: **"Du har inte behörighet att visa krediter"**. Hon är Contributor, men bara på resursgruppen. Kostnaderna ligger på prenumerationen, och dit når hon inte. Behörigheten slutar precis där jag satte den.
+Anna får samma kreditvarning som Erik. Hon är Contributor, men bara på resursgruppen, och kostnaderna ligger på prenumerationen. Behörigheten slutar precis där jag satte den.
 
 ![Anna inloggad i portalen](images/annakonto.png)
 
@@ -140,7 +142,7 @@ Sen stoppade jag servern som henne. Det gick igenom direkt, utan felmeddelande, 
 
 ![vm-novatrix-web stoppad av Anna](images/annavmstoppat.png)
 
-En detalj i den bilden: nu är Starta om, Stoppa och Viloläge utgråade medan Starta är aktiv. Det ser ut som Eriks fall men är något annat. Här är knapparna släckta för att maskinen redan är stoppad, inte för att Anna saknar behörighet.
+En detalj i bilden: Starta om, Stoppa och Viloläge är utgråade medan Starta är aktiv. Det ser ut som Eriks fall men är tvärtom — knapparna är släckta för att maskinen redan är stoppad, inte för att Anna saknar behörighet.
 
 Till sist startade jag servern igen som Anna, så att miljön var tillbaka som den var.
 
@@ -206,7 +208,7 @@ Därför stannar Owner hos mitt administratörskonto. Driften kan bygga och riva
 
 ### Rolltilldelningarna som kod
 
-Portalen är bra för att förstå vad som händer, men det man klickar fram går inte att göra om exakt likadant, och det syns inte i repot vad någon ändrat. Därför ligger rolltilldelningarna som ett skript i veckans mapp: **[rbac-novatrix.sh](rbac-novatrix.sh)**. Varje tilldelning är en rad som ser ut så här:
+Portalen är bra för att förstå vad som händer, men det man klickar fram går inte att göra om exakt likadant, och det syns inte i repot vad någon ändrat. Därför ligger rolltilldelningarna som ett skript i veckans mapp: **[rbac-novatrix.sh](scripts/rbac-novatrix.sh)**. Varje tilldelning är en rad som ser ut så här:
 
 ```bash
 az role assignment create --assignee $DRIFT --role "Contributor" --scope $RG
@@ -218,7 +220,7 @@ Att inga id står i filen betyder att den fungerar i vilken prenumeration som he
 
 ### Att kunna riva är lika viktigt
 
-**[rbac-novatrix-delete.sh](rbac-novatrix-delete.sh)** tar bort samma sex tilldelningar och är byggd som en spegelbild av den första. Enda skillnaden är ordet `delete` i stället för `create`:
+**[rbac-novatrix-delete.sh](scripts/rbac-novatrix-delete.sh)** tar bort samma sex tilldelningar och är byggd som en spegelbild av den första. Enda skillnaden är ordet `delete` i stället för `create`:
 
 ```bash
 az role assignment delete --assignee $DRIFT --role "Contributor" --scope $RG
