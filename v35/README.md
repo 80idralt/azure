@@ -216,8 +216,6 @@ az role assignment create --assignee $DRIFT --role "Contributor" --scope $RG
 
 Att inga id står i filen betyder att den fungerar i vilken prenumeration som helst. Byter man arbetsplats eller bygger om miljön hämtas de nya värdena automatiskt.
 
-**Vad skriptet inte gör.** Det skapar inte grupperna. De ligger i Entra ID och skapas där, precis som i grunduppgiften. Det uppgiften vill se i kod är rolltilldelningarna, alltså kopplingen mellan grupp, roll och resursgrupp, och det är den delen filen bygger upp från noll.
-
 ### Att kunna riva är lika viktigt
 
 **[rbac-novatrix-delete.sh](rbac-novatrix-delete.sh)** tar bort samma sex tilldelningar och är byggd som en spegelbild av den första. Enda skillnaden är ordet `delete` i stället för `create`:
