@@ -19,7 +19,9 @@ Jag bygger vidare på miljön från v34:
 - Resursgrupp: `rg-novatrix-v34` i `swedencentral`
 - I den ligger `vm-novatrix-web` med disk, nätverkskort, nätverk, publikt IP och NSG
 
-Skripten som bygger den miljön ligger i [scripts/](scripts/), kopierade hit från v34 så att hela veckan går att återskapa från den här mappen. `deploy.ps1` skapar resursgruppen och servern, `cloud-init.yaml` installerar Nginx och hämtar webbsidan vid uppstart, och `destroy.ps1` river allt igen. Själva sidan ligger i [public/](public/).
+Skripten som bygger den miljön ligger i [scripts/](scripts/), kopierade hit från v34 så att hela veckan går att återskapa från den här mappen. `deploy.ps1` skapar resursgruppen och servern, `cloud-init.yaml` installerar Nginx och hämtar webbsidan vid uppstart, och `destroy.ps1` river allt igen.
+
+Webbsidan är densamma som i v34. Servern klonar repot vid uppstart och `cloud-init.yaml` hämtar sidan ur `v34/public/`, så kopian i [public/](public/) finns här bara för att veckans mapp ska gå att läsa som en helhet.
 
 ## Vad jag gjorde
 
@@ -233,7 +235,7 @@ Regeln att komma ihåg: create och delete måste ha **samma tre delar**. Skiljer
 Jag tog bort alla rolltilldelningar, kontrollerade att listan var tom, och körde sedan skriptet.
 
 ```powershell
-az role assignment list --resource-group rg-novatrix-v34 --query "[?principalType=='Group'].{Grupp:principalName, Roll:roleDefinitionName}" -o table
+az role assignment list --resource-group rg-novatrix-v34 --query "[?principalType=='Group'].{Grupp:principalName, Typ:principalType, Roll:roleDefinitionName}" -o table
 ```
 
 Före körningen: tom lista. Efter:
