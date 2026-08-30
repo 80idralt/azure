@@ -6,7 +6,7 @@
 
 **Klass:** MOV25
 
-**Datum:** 2026-08-28
+**Datum:** 2026-08-31
 
 ## Syfte
 Novatrix har sedan v34 en server i Azure. Nu ska jag bestämma vem som får göra vad med den. Driften behöver kunna sköta servern, utvecklarna behöver bara kunna titta. Ingen ska ha mer behörighet än den behöver för sitt jobb.
