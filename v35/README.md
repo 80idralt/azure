@@ -75,7 +75,7 @@ Att behörigheten går via gruppen och inte via kontot syns när man öppnar en 
 
 ![Annas behörigheter: Contributor på rg-novatrix-v34 via Azure-Drift](images/annasbehorigheter124249.png)
 
-### Kontroll av det jag gjort
+### 4. Kontroll av det jag gjort
 Så här läste jag av att allt blev rätt, allt i portalen:
 
 - **Att rätt person hamnat i rätt grupp:** Entra ID -> Groups -> gruppen -> **Members**. `Azure-Drift` innehåller Anna, `Azure-Utveckling` innehåller Erik.
@@ -104,7 +104,7 @@ Azure-Drift       Group  Contributor
 Azure-Utveckling  Group  Reader
 ```
 
-### 4. Förberedde en identitet åt appen
+### 5. Förberedde en identitet åt appen
 
 I v37 ska ärendeformuläret kunna skriva in ärenden i lagringen helt själv, utan att någon människa loggar in. Det enkla sättet vore att lägga en nyckel i koden, men då hamnar ett lösenord i repot. En hanterad identitet löser det genom att Azure sköter inloggningen åt appen, så det finns inget lösenord som kan läcka.
 
@@ -116,7 +116,7 @@ az identity create --name id-novatrix-app --resource-group rg-novatrix-v34 --loc
 
 Den har medvetet ingen roll än. Den kopplas ihop med lagringen först i v37, och får då bara rätt att skriva filer i lagringskontot.
 
-### 5. Verifiering
+### 6. Verifiering
 
 Att rolltilldelningen syns i portalen bevisar bara att jag gjort den, inte att den faktiskt stoppar någon. Så jag öppnade ett inkognitofönster på portal.azure.com, för att inte råka använda min egen adminsession, och loggade in som `utveckling-erik@idrisaltun2029hotmail.onmicrosoft.com`. Redan på startsidan syntes att kontot är begränsat: kostnadsrutan sa **"Du har inte behörighet att visa krediter"**, eftersom Erik bara har behörighet på resursgruppen och inte på prenumerationen.
 
@@ -150,7 +150,7 @@ Till sist startade jag servern igen som Anna, så att miljön var tillbaka som d
 
 ![Anna startar servern igen](images/annamaskinstartat.png)
 
-## Resultat
+## 7. Resultat
 
 | | Erik, via Azure-Utveckling | Anna, via Azure-Drift | Jag själv, admin |
 |---|---|---|---|
@@ -163,7 +163,7 @@ Till sist startade jag servern igen som Anna, så att miljön var tillbaka som d
 
 Ingen har behörighet direkt på sitt konto, ingen roll sträcker sig utanför resursgruppen, och rätten att dela ut åtkomst har bara jag. Och det är verifierat på riktigt, inte bara inställt.
 
-## Utmaning för Väl godkänt (VG)
+## 8. Utmaning för Väl godkänt (VG)
 
 ### Modellen
 
@@ -255,7 +255,7 @@ Sex tilldelningar, alla med `Typ: Group` och alla på resursgruppen. Grupperna o
 
 Azure-Natverk, Azure-Backup och Azure-Support har inga medlemmar än, så de går inte att inloggningstesta som jag gjorde med Erik och Anna. De är förberedda för de funktioner Novatrix faktiskt anställer till, och tilldelningarna är kontrollerade i listan ovan. Ekonomirollen testade jag däremot på riktigt, se nedan.
 
-### En fallgrop jag fastnade i
+### 9. En fallgrop jag fastnade i
 
 Första gången jag körde skriptet fick jag sex likadana fel:
 
@@ -275,7 +275,7 @@ export MSYS_NO_PATHCONV=1
 
 Den stänger av översättningen. På riktig Linux, till exempel i Azure Cloud Shell, finns ingen sådan variabel och raden ignoreras. Filerna fungerar därför på båda ställena.
 
-### Ekonomirollen testad på riktigt
+### 10. Ekonomirollen testad på riktigt
 
 För att kunna testa ekonomirollen skapade jag användaren `ekonomi-linda@idrisaltun2029hotmail.onmicrosoft.com` och la henne i `Azure-Ekonomi`. Sen loggade jag in som henne i ett inkognitofönster.
 
@@ -303,7 +303,7 @@ Två olika fel dök upp under samma session, och skillnaden mellan dem är värd
 
 Därmed är ekonomirollen bevisad från tre håll: hon ser kostnaderna, hon ser budgeten, och hon kan inte ändra någonting.
 
-### Hur modellen skalar
+### 11. Hur modellen skalar
 
 **Nytt team** är en grupp och en rad till i skriptet. Ska Novatrix anställa testare skapas `Azure-Test`, får `Reader` och läggs till som en rad. Ingenting befintligt behöver ändras.
 
