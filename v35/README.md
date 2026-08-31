@@ -6,10 +6,10 @@
 
 **Klass:** MOV25
 
-**Datum:** 2026-08-30
+**Datum:** 2026-08-31
 
 ## Syfte
-Novatrix har sedan v34 en server i Azure. Nu ska jag bestämma vem som får göra vad med den. Driften behöver kunna sköta servern, utvecklarna behöver bara kunna titta. Ingen ska ha mer behörighet än den behöver för sitt jobb.
+Novatrix har sedan v34 en server i Azure. Nu ska jag bestämma vem som får göra vad med den. Driften behöver kunna sköta servern, utvecklarna behöver bara kunna titta. Ingen ska ha mer behörighet än den behöver för sitt jobb, alltså principen om least privilege.
 
 Grunduppgiften gjorde jag för hand i Azure Portal. VG-delen längst ner byggde jag med kod i stället.
 
@@ -46,7 +46,7 @@ Sen gjorde jag en grupp per roll under **Entra ID -> Groups -> New group**. Jag 
 Anledningen till att jag använder grupper är att folk byter jobb men rollerna finns kvar. Kommer det in en ny utvecklare lägger jag bara till hen i `Azure-Utveckling`, så får hen rätt åtkomst automatiskt. Jag behöver aldrig gå in och peta i behörigheterna på resursgruppen igen.
 
 ### 3. Gav grupperna behörighet
-Behörigheterna satte jag på resursgruppen under **rg-novatrix-v34 -> Access control (IAM) -> Add -> Add role assignment**. Jag valde rollen först och sen gruppen. Ingen av användarna har fått behörighet direkt på sitt konto, allt går via grupperna.
+Behörigheterna satte jag med RBAC, Azures rollbaserade åtkomstkontroll, på resursgruppen under **rg-novatrix-v34 -> Access control (IAM) -> Add -> Add role assignment**. Jag valde rollen först och sen gruppen. Ingen av användarna har fått behörighet direkt på sitt konto, allt går via grupperna.
 
 | Grupp | Roll | Scope | Motivering |
 |---|---|---|---|
@@ -178,7 +178,7 @@ Jag byggde ut modellen från två roller till sex, en per funktion på företage
 | Azure-Support | Reader | Bara läsa | Novatrix är en kundtjänst. Supporten måste kunna se om servern är uppe när kunder ringer, men aldrig röra den |
 | Azure-Ekonomi | Cost Management Reader | Läsa kostnader, budgetar och prognoser. Ser inte innehållet i resurserna | Ekonomi ska följa förbrukningen mot budgeten från v34, ingenting annat |
 
-Varje roll är vald efter frågan **vad är minsta roll som räcker för det här jobbet**. Ingen har fått något "för säkerhets skull".
+Varje roll är vald efter frågan **vad är minsta roll som räcker för det här jobbet**. Det är principen om least privilege, och den är grunden för hela modellen. Ingen har fått något "för säkerhets skull".
 
 Två val är värda att lyfta fram.
 
