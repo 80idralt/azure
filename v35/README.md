@@ -23,6 +23,8 @@ Skripten som bygger den miljön ligger i [scripts/](scripts/), kopierade hit fr�
 
 Webbsidan är densamma som i v34. Servern klonar repot vid uppstart och `cloud-init.yaml` hämtar sidan ur `v34/public/`, så kopian i [public/](public/) finns här bara för att veckans mapp ska gå att läsa som en helhet.
 
+Den 2 september rev jag hela miljön och byggde upp den igen från grunden med `destroy.ps1`, `deploy.ps1` och `rbac-novatrix.sh`, för att bevisa att både servern och behörighetsmodellen är reproducerbara. Servern fick då en ny publik IP-adress, så den som syns i skärmdumparna nedan är den som gällde vid respektive tillfälle, inte den aktuella.
+
 ## Vad jag gjorde
 
 ### 1. Skapade två användare
