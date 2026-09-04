@@ -336,6 +336,31 @@ Varje regel finns av en anledning. Här är vad de är till för.
 
 Ett enda av de här lagren hade inte räckt. Poängen är att de ligger på varandra.
 
+### När min egen regel låste ute mig
+
+Mitt i arbetet slutade SSH plötsligt fungera:
+
+```
+ssh azureuser-web@20.240.247.212
+ssh: connect to host 20.240.247.212 port 22: Connection timed out
+```
+
+Första tanken var att servern låg nere, men webbsidan svarade `200 OK`. Det var regeln som gjorde sitt jobb. Min operatör hade bytt min publika adress, och regeln såg en okänd källa och slängde paketen. Precis som den ska.
+
+Det säger två saker. Att begränsningen faktiskt fungerar, vilket är svårt att visa tydligare än så här. Och att **en IP-adress som skrivs in för hand blir fel förr eller senare** — den var rätt den dag jag skrev den och fel någon dagar senare.
+
+Koden löser halva problemet. `$(curl -s -4 https://ifconfig.me)` gör att adressen aldrig hamnar i repot och ett nybygge alltid får rätt adress. `-4` tvingar IPv4, och `https://` gör att svaret inte går att förfalska på vägen — utan den kunde en okrypterad anslutning manipuleras och sätta fel adress i regeln. Kvar är att jag litar på att tjänsten själv svarar rätt; i en produktionsmiljö hade jag använt Azure Bastion eller Just-In-Time-åtkomst i stället för en IP-adress som källa.
+
+Efter VG-delen lever risken bara kvar på `Allow-SSh-Admin` på hoppvärden — webbens `Allow-SSh` pekar nu på ett fast subnät i stället. Exakt samma lockout hände på den nya regeln under VG-bygget. Samma fix, nytt mål:
+
+```
+az network nsg rule update \
+  --resource-group rg-novatrix-v34 \
+  --nsg-name nsg-admin-v36 \
+  --name Allow-SSh-Admin \
+  --source-address-prefixes $(curl -s -4 https://ifconfig.me)
+```
+
 ### Hur designen växer
 
 | Behov | Vad man gör |
@@ -343,7 +368,7 @@ Ett enda av de här lagren hade inte räckt. Poängen är att de ligger på vara
 | Ny tjänst | Nytt subnät med egen NSG. Hoppvärden tog `10.0.3.0/24`, `10.0.4.0/24` och uppåt är ledigt |
 | Fler regler | Prioritetsluckorna mellan 200 och 4095 räcker länge. Tydliga namn så listan går att läsa |
 | Fler webbservrar | En ASG i stället för att räkna upp IP-adresser, då gäller regeln gruppen |
-| Fler admin-adresser | Byt den enda adressen mot en lista: `ADMIN_IPS=("$(curl -s ifconfig.me)" "1.2.3.4")` och `--source-address-prefixes "${ADMIN_IPS[@]}"` |
+| Fler admin-adresser | Byt den enda adressen mot en lista: `ADMIN_IPS=("$(curl -s -4 https://ifconfig.me)" "1.2.3.4")` och `--source-address-prefixes "${ADMIN_IPS[@]}"` |
 | Bygga någon annanstans | `RG=annan-grupp bash natverk-novatrix.sh` |
 
 Den fjärde raden är samma tanke som gruppmodellen i v35: behörighet läggs på en grupp, inte på en enskild. Här på nätverksnivå, där regeln pekar på en lista av betrodda källor i stället för på en adress.

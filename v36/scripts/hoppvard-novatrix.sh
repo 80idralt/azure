@@ -49,7 +49,9 @@ az network nsg create \
 # 4096 Deny-All-Inbound  allt annat
 #
 # -4 tvingar IPv4. SSH går över v4, och ifconfig.me svarar ibland med en
-# IPv6-adress som då gör regeln obrukbar.
+# IPv6-adress som då gör regeln obrukbar. https:// i stället för http://
+# gör att svaret går krypterat och kontrolleras mot tjänstens certifikat,
+# så det inte går att förfalska på vägen.
 
 az network nsg rule create \
     --resource-group "$RG" \
@@ -59,7 +61,7 @@ az network nsg rule create \
     --direction Inbound \
     --access Allow \
     --protocol Tcp \
-    --source-address-prefixes $(curl -s -4 ifconfig.me) \
+    --source-address-prefixes $(curl -s -4 https://ifconfig.me) \
     --source-port-ranges '*' \
     --destination-address-prefixes '*' \
     --destination-port-ranges 22
