@@ -273,51 +273,33 @@ Samma nät som det jag har i drift, byggt på under en minut utan att klicka nå
 
 ### Hoppvärd i stället för SSH mot webben
 
-I G-delen pekade `Allow-SSh` på webbservern rakt på min egen publika adress. Det fungerar, men webbservern har då port 22 öppen mot internet — om än bara mot en adress. Den adressen ligger på det publika nätet, min operatör byter den med jämna mellanrum, och skulle regeln någon gång peka fel står dörren mitt på fasaden.
+I G-delen pekade `Allow-SSh` på webbservern rakt på min egen publika adress — fungerar, men porten ligger ändå öppen mot en adress som byts med jämna mellanrum.
 
-VG-lösningen flyttar den dörren. SSH mot internet finns nu bara på **en** maskin, `vm-novatrix-jump`, som står i ett eget subnät (`snet-admin`, `10.0.3.0/24`) och inte gör något annat än att släppa vidare inloggningar. Till webbservern tar jag mig genom att först logga in på hoppvärden och därifrån hoppa in på webbserverns privata adress.
-
-Tre regler håller ihop det:
+VG-lösningen flyttar den dörren till en egen maskin, `vm-novatrix-jump`, i ett eget subnät (`snet-admin`, `10.0.3.0/24`) som inte gör något annat än att släppa vidare inloggningar. Till webben tar jag mig genom att först logga in på hoppvärden och därifrån hoppa vidare till webbens privata adress.
 
 | NSG | Regel | Vad den gör |
 |---|---|---|
-| `nsg-admin-v36` | `Allow-SSh-Admin` — 22 från min IP | Enda vägen in i nätet från internet. Bara jag, bara till hoppvärden |
-| `nsg-web-v36` | `Allow-SSh` — 22 från `10.0.3.0/24` | SSH mot webben tillåts bara från admin-subnätet — du måste alltså redan stå på hoppvärden |
-| båda | `Deny-All-Inbound` (4096) | Allt annat inkommande nekas |
+| `nsg-admin-v36` | `Allow-SSh-Admin` — 22 från min IP | Enda vägen in i nätet från internet |
+| `nsg-web-v36` | `Allow-SSh` — 22 från `10.0.3.0/24` | SSH mot webben bara från admin-subnätet — man måste redan stå på hoppvärden |
+| båda | `Deny-All-Inbound` (4096) | Allt annat nekas |
+
+Webbservern har med det ingen SSH-yta mot internet alls — ett skanningsförsök mot port 22 blir timeout, paketet slängs i NSG:n före SSH.
+
+Ligger som skript: **[scripts/hoppvard-novatrix.sh](scripts/hoppvard-novatrix.sh)**, körd efter `natverk-novatrix.sh`. Sex block: subnätet, säkerhetsgruppen, dess två regler, kopplingen till subnätet, hoppvärds-VM:en (`--nsg ""`, skyddet ligger på subnätet), och sist ompekningen av webbens `Allow-SSh` från min adress till `10.0.3.0/24` — det sista blocket är det som skiljer VG från G.
 
 ![Hela miljön efter VG](images/resursoversikt.png)
-![nsg-admin-v36](images/nsgadminv36.png)
 ![Effektiva säkerhetsregler på hoppvärdens nätverkskort](images/nsgadminv36effec.png)
 ![Effektiva säkerhetsregler på webbens nätverkskort — Allow-SSh pekar nu på 10.0.3.0/24](images/nsgwebv36effec.png)
 ![vm-novatrix-jump i snet-admin](images/vmjumpoverview.png)
 
-Webbservern har med det ingen SSH-yta mot internet alls. Skannar ett botnät efter öppen port 22 på dess adress blir det timeout — paketet slängs redan i NSG:n, före SSH.
-
-Inloggningen sker med ProxyJump (`-J`) så att trafiken tunnlas genom hoppvärden och nyckeln aldrig lämnar en kopia där:
+Inloggningen sker med ProxyJump (`-J`), så trafiken tunnlas genom hoppvärden och nyckeln aldrig lämnar en kopia där:
 
 ```
 ssh-add ~/.ssh/id_rsa
 ssh -J azureuser-web@135.225.34.191 azureuser-web@10.0.1.4
 ```
 
-Priset är en extra maskin. Regionens kvot är 4 kärnor och minsta VM är 2, så webben och hoppvärden fyller den precis — det får inte plats en tredje maskin, och den inlämnade v34-servern kan inte stå uppe samtidigt som labbmiljön. I en riktig miljö skulle jag väga kostnaden mot nyttan; här är hoppvärden det uppgiften efterfrågar, och den passar in i samma tanke som resten: ett lager till mellan internet och det som ska skyddas.
-
-### Hoppvärden som kod
-
-Precis som nätverket ligger hoppvärden som ett skript: **[scripts/hoppvard-novatrix.sh](scripts/hoppvard-novatrix.sh)**, körd efter `natverk-novatrix.sh`.
-
-| Block | Kommando | Gör |
-|---|---|---|
-| 1 | `az network vnet subnet create` | `snet-admin`, `10.0.3.0/24` |
-| 2 | `az network nsg create` | `nsg-admin-v36` |
-| 3 | `az network nsg rule create` ×2 | `Allow-SSh-Admin` och `Deny-All-Inbound` |
-| 4 | `az network vnet subnet update` | Kopplar gruppen till subnätet |
-| 5 | `az vm create` | Hoppvärden i `snet-admin`, `--nsg ""` så skyddet ligger på subnätet |
-| 6 | `az network nsg rule update` | Pekar om webbens `Allow-SSh` från min IP till `10.0.3.0/24` |
-
-Block 6 är det som skiljer VG från G. Innan pekade regeln på min adress; efteråt på admin-subnätet, och vägen in går via hoppvärden.
-
-Verifieringen på riktigt, från min dator:
+Verifierat på riktigt, från min dator:
 
 ```
 ssh -J azureuser-web@135.225.34.191 azureuser-web@10.0.1.4 "hostname"   -> vm-novatrix-web
@@ -325,9 +307,7 @@ ssh -o ConnectTimeout=8 azureuser-web@20.240.247.212                    -> Conne
 ssh azureuser-web@135.225.34.191 "hostname"                             -> vm-novatrix-jump
 ```
 
-Första raden går hela vägen in via hoppvärden. Andra visar att webben inte går att nå direkt — och att felet blir timeout, inte "Permission denied", betyder att paketet stoppas i NSG:n innan SSH ens svarar. Tredje att hoppvärden själv är nåbar, från min adress.
-
-Network Watcher IP flow verify bekräftar samma sak på regelnivå:
+Direkt mot webben blir det timeout, inte "Permission denied" — beviset att NSG:n stoppar paketet före SSH ens svarar. Network Watcher IP flow verify bekräftar samma sak på regelnivå:
 
 | Paket | Resultat | Regel |
 |---|---|---|
@@ -339,14 +319,15 @@ Network Watcher IP flow verify bekräftar samma sak på regelnivå:
 ![IP flow verify, SSH mot webben från hoppvärden](images/verify22weballow.png)
 ![IP flow verify, SSH mot hoppvärden från min IP](images/verify22jumpallow.png)
 
+Priset är en extra maskin — regionens kvot är 4 kärnor och minsta VM är 2, så webben och hoppvärden fyller den precis. I en riktig miljö hade kostnaden vägts mot nyttan; här är hoppvärden det uppgiften efterfrågar.
+
 ### Vilka hot designen skyddar mot
 
 Varje regel finns av en anledning. Här är vad de är till för.
 
 | Lager | Hotet det möter |
 |---|---|
-| SSH mot webben bara via hoppvärden | **Brute force mot SSH.** Botnät skannar internet dygnet runt efter öppen port 22. På webbserverns adress finns porten inte alls, paketen slängs tyst i NSG:n |
-| Hoppvärden som enda dörr in | **Direkt åtkomst till webbservern.** Även med SSH låst till en adress låg porten kvar på webben. Nu måste en angripare först ta sig förbi en maskin som inte kör något annat än vidarebefordran |
+| Hoppvärd i stället för öppen SSH | **Brute force och direkt åtkomst.** Webbserverns adress har ingen SSH-port alls längre — en angripare måste först ta sig förbi en maskin som inte kör något annat än vidarebefordran |
 | `Deny-All-Inbound` på webben | **Portskanning och oavsiktliga öppningar.** Startar någon en tjänst på servern av misstag blir den ändå inte nåbar utifrån |
 | Webb och lagring i skilda subnät | **Lateral rörelse.** Kapas webbservern står angriparen inte automatiskt vid lagringen, den måste förbi ännu en säkerhetsgrupp |
 | `Allow-Web-To-Storage`, bara 443 | **Onödig angreppsyta.** Bara den port lagringen faktiskt använder, inget mer |
@@ -368,9 +349,9 @@ Första tanken var att servern låg nere, men webbsidan svarade `200 OK`. Det va
 
 Det säger två saker. Att begränsningen faktiskt fungerar, vilket är svårt att visa tydligare än så här. Och att **en IP-adress som skrivs in för hand blir fel förr eller senare** — den var rätt den dag jag skrev den och fel någon dagar senare.
 
-Koden löser halva problemet. `$(curl -s -4 ifconfig.me)` gör att adressen aldrig hamnar i repot och att ett nybygge alltid får rätt adress. `-4` tvingar IPv4 — utan den svarade `ifconfig.me` en gång med en IPv6-adress, och regeln blev obrukbar för SSH som går över v4.
+Koden löser halva problemet. `$(curl -s -4 ifconfig.me)` gör att adressen aldrig hamnar i repot och ett nybygge alltid får rätt adress (`-4` tvingar IPv4, annars kan `ifconfig.me` svara med en IPv6-adress som gör regeln obrukbar för SSH).
 
-Efter VG-delen lever den här risken bara på ett ställe. Webbserverns `Allow-SSh` pekar numera på admin-subnätet (`10.0.3.0/24`), ett fast värde som aldrig blir fel. Kvar med en handskriven adress är bara `Allow-SSh-Admin` på hoppvärden — och exakt samma sak hände där under VG-bygget: SSH mot hoppvärden slutade svara tills regeln pekades om. Fixen är densamma, bara ett nytt mål:
+Efter VG-delen lever risken bara kvar på `Allow-SSh-Admin` på hoppvärden — webbens `Allow-SSh` pekar nu på ett fast subnät i stället. Exakt samma lockout hände på den nya regeln under VG-bygget. Samma fix, nytt mål:
 
 ```
 az network nsg rule update \
