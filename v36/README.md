@@ -336,31 +336,6 @@ Varje regel finns av en anledning. Här är vad de är till för.
 
 Ett enda av de här lagren hade inte räckt. Poängen är att de ligger på varandra.
 
-### När min egen regel låste ute mig
-
-Mitt i arbetet slutade SSH plötsligt fungera:
-
-```
-ssh azureuser-web@20.240.247.212
-ssh: connect to host 20.240.247.212 port 22: Connection timed out
-```
-
-Första tanken var att servern låg nere, men webbsidan svarade `200 OK`. Det var regeln som gjorde sitt jobb. Min operatör hade bytt min publika adress, och regeln såg en okänd källa och slängde paketen. Precis som den ska.
-
-Det säger två saker. Att begränsningen faktiskt fungerar, vilket är svårt att visa tydligare än så här. Och att **en IP-adress som skrivs in för hand blir fel förr eller senare** — den var rätt den dag jag skrev den och fel någon dagar senare.
-
-Koden löser halva problemet. `$(curl -s -4 ifconfig.me)` gör att adressen aldrig hamnar i repot och ett nybygge alltid får rätt adress (`-4` tvingar IPv4, annars kan `ifconfig.me` svara med en IPv6-adress som gör regeln obrukbar för SSH).
-
-Efter VG-delen lever risken bara kvar på `Allow-SSh-Admin` på hoppvärden — webbens `Allow-SSh` pekar nu på ett fast subnät i stället. Exakt samma lockout hände på den nya regeln under VG-bygget. Samma fix, nytt mål:
-
-```
-az network nsg rule update \
-  --resource-group rg-novatrix-v34 \
-  --nsg-name nsg-admin-v36 \
-  --name Allow-SSh-Admin \
-  --source-address-prefixes $(curl -s -4 ifconfig.me)
-```
-
 ### Hur designen växer
 
 | Behov | Vad man gör |
