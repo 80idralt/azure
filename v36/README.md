@@ -31,7 +31,7 @@ Jag skapade ett eget VNet och delade det i två subnät, ett för webben och ett
 | `snet-db` | `10.0.2.0/24` | Privat subnät (ingen väg ut till internet), tomt än så länge, förberett för lagringen i v37 |
 | `default` | `10.0.0.0/24` | Standardsubnätet som skapades automatiskt, används inte, ska bort |
 
-`/16` på nätet och `/24` per subnät, det räcker gott och är lätt att hålla ordning på. Poängen med uppdelningen är att webben och lagringen ska behandlas olika. Webben måste gå att nå utifrån, lagringen ska inte det. Tar någon sig in via webben ska de inte stå direkt vid databasen.
+`/16` på nätet och `/24` per subnät, det räcker gott och är lätt att hålla ordning på. Poängen med uppdelningen är att webben och lagringen ska behandlas olika. Webben måste gå att nå utifrån, lagringen ska inte det. Kommer någon in via webben ska de inte komma åt lagringen på köpet.
 
 ```
 az network vnet subnet list -g rg-novatrix-v34 --vnet-name vnet-novatrix-v36 \
@@ -57,6 +57,8 @@ Varje subnät fick en egen nätverkssäkerhetsgrupp. Utgående trafik rörde jag
 | 100 | `Allow-Http-Https` | In | `*` (internet) | 80, 443 | Allow | Formuläret ska nås av kunder |
 | 200 | `Allow-SSh` | In | `31.208.59.112` | 22 | Allow | Jag måste kunna sköta servern, men bara jag |
 | 4096 | `Deny-All-Inbound` | In | `*` | `*` | Deny | Gör "stäng allt annat" tydligt i listan |
+
+Adressen i tabellen är den som gällde när jag dokumenterade, och den syns även i skärmdumparna. Min operatör har bytt den sedan dess, mer om det i avsnitt 8.
 
 **`nsg-db-v36`** på `snet-db`:
 
@@ -183,8 +185,130 @@ Kort sagt: 80 och 443 öppet för alla, 22 bara för mig, allt annat stängt, oc
 
 ## 8. Väl godkänt (VG)
 
-Det jag tänker bygga vidare på, i `scripts/`:
+### Nätverket som kod
 
-- Hela nätet som kod med `az network`, så att det går att återskapa från repot utan att klicka
-- Fler lager, till exempel en bastion i ett eget admin-subnät så att ingen server behöver ha SSH öppet mot internet alls
-- En genomgång av vilka hot designen skyddar mot: portskanning mot en exponerad admin-port, att någon tar sig från webben vidare in mot lagringen, och att en kapad backend skickar ut data
+G-delen klickade jag fram i portalen. Problemet med det är att ingen kan se *hur* nätet byggdes, bara att det finns. Försvinner det får jag klicka igen och hoppas att jag minns alla värden rätt.
+
+Därför ligger hela nätverkslagret nu som ett skript: **[scripts/natverk-novatrix.sh](scripts/natverk-novatrix.sh)**. Elva kommandon i sex block.
+
+| Block | Kommando | Skapar |
+|---|---|---|
+| 1 | `az network vnet create` | VNet:et och `snet-web` |
+| 2 | `az network vnet subnet create` | `snet-db` |
+| 3 | `az network nsg create` ×2 | De två säkerhetsgrupperna |
+| 4 | `az network nsg rule create` ×3 | Reglerna i `nsg-web-v36` |
+| 5 | `az network nsg rule create` ×2 | Reglerna i `nsg-db-v36` |
+| 6 | `az network vnet subnet update` ×2 | Kopplar grupperna till subnäten |
+
+Ordningen spelar roll. Nätet måste finnas före subnäten, subnäten före något kan placeras i dem, och säkerhetsgrupperna måste ha sina regler innan de kopplas på. Hade jag kopplat en tom NSG först hade webbsidan legat nere tills reglerna var inne.
+
+Två val i skriptet är värda att förklara.
+
+**Värdena ligger överst som variabler:**
+
+```
+RG="${RG:-rg-novatrix-v34}"
+LOC="swedencentral"
+VNET="vnet-novatrix-v36"
+```
+
+`${RG:-...}` betyder "använd den resursgrupp jag matar in, annars den här". Vill någon bygga nätet någon annanstans skriver de `RG=min-grupp bash natverk-novatrix.sh` och behöver aldrig röra filen.
+
+**Admin-adressen hämtas när skriptet körs:**
+
+```
+--source-address-prefixes $(curl -s ifconfig.me)
+```
+
+`$(...)` kör kommandot inuti och stoppar in svaret på platsen. Ingen IP-adress hamnar alltså i repot, och en kollega som kör skriptet får sin egen adress insläppt i stället för min.
+
+### Beviset: nätet byggt från noll
+
+Att skriptet ser rätt ut i filen betyder inte att det fungerar. Så jag skapade en tom resursgrupp, körde skriptet mot den och tittade på vad som kom ut.
+
+```
+az group create --name rg-novatrix-v36-test --location swedencentral
+RG=rg-novatrix-v36-test bash natverk-novatrix.sh
+
+az network vnet subnet list -g rg-novatrix-v36-test --vnet-name vnet-novatrix-v36 -o table
+
+Namn      NSG
+--------  --------------------------------------
+snet-web  .../networkSecurityGroups/nsg-web-v36
+snet-db   .../networkSecurityGroups/nsg-db-v36
+
+az network nsg rule list -g rg-novatrix-v36-test --nsg-name nsg-web-v36 -o table
+
+Namn              Prio  Riktning  Kalla         Access
+----------------  ----  --------  ------------  ------
+Allow-Http-Https  100   Inbound   *             Allow
+Allow-SSh         200   Inbound   31.208.56.70  Allow
+Deny-All-Inbound  4096  Inbound   *             Deny
+
+az network nsg rule list -g rg-novatrix-v36-test --nsg-name nsg-db-v36 -o table
+
+Namn                  Prio  Riktning  Kalla        Access
+--------------------  ----  --------  -----------  ------
+Allow-Web-To-Storage  100   Inbound   10.0.1.0/24  Allow
+Deny-All-Inbound      4096  Inbound   *            Deny
+
+az resource list -g rg-novatrix-v36-test -o table
+
+Namn               Typ
+-----------------  ---------------------------------------
+vnet-novatrix-v36  Microsoft.Network/virtualNetworks
+nsg-web-v36        Microsoft.Network/networkSecurityGroups
+nsg-db-v36         Microsoft.Network/networkSecurityGroups
+```
+
+Samma nät som det jag har i drift, byggt på under en minut utan att klicka någonstans. Sedan raderade jag testgruppen igen. Hela testet kostade noll kronor, eftersom VNet, subnät och NSG är gratis.
+
+### Vilka hot designen skyddar mot
+
+Varje regel finns av en anledning. Här är vad de är till för.
+
+| Lager | Hotet det möter |
+|---|---|
+| SSH bara från min adress | **Brute force mot SSH.** Botnät skannar internet dygnet runt efter öppen port 22 och gissar sig in. Nu ser de inte ens att porten finns, paketen slängs tyst |
+| `Deny-All-Inbound` på webben | **Portskanning och oavsiktliga öppningar.** Startar någon en tjänst på servern av misstag blir den ändå inte nåbar utifrån |
+| Webb och lagring i skilda subnät | **Lateral rörelse.** Kapas webbservern står angriparen inte automatiskt vid lagringen, den måste förbi ännu en säkerhetsgrupp |
+| `Allow-Web-To-Storage`, bara 443 | **Onödig angreppsyta.** Bara den port lagringen faktiskt använder, inget mer |
+| `Deny-All-Inbound` på lagringen | **Hot inifrån.** Azures default släpper in all trafik från VNet:et. Min regel stänger det, så bara webbsubnätet kommer in och inte något jag bygger senare |
+| `snet-db` utan väg ut | **Exfiltrering.** En kapad backend kan varken ringa hem eller skicka ut data på egen hand |
+
+Ett enda av de här lagren hade inte räckt. Poängen är att de ligger på varandra.
+
+### När min egen regel låste ute mig
+
+Mitt i arbetet slutade SSH plötsligt fungera:
+
+```
+ssh azureuser-web@20.240.247.212
+ssh: connect to host 20.240.247.212 port 22: Connection timed out
+```
+
+Första tanken var att servern låg nere, men webbsidan svarade `200 OK`. Det var regeln som gjorde sitt jobb. Min operatör hade bytt min publika adress, och regeln såg en okänd källa och slängde paketen. Precis som den ska.
+
+Det säger två saker. Att begränsningen faktiskt fungerar, vilket är svårt att visa tydligare än så här. Och att **en IP-adress som skrivs in för hand blir fel förr eller senare** — den var rätt den dag jag skrev den och fel någon dagar senare.
+
+Koden löser halva problemet. `$(curl -s ifconfig.me)` gör att adressen aldrig hamnar i repot och att ett nybygge alltid får rätt adress. Ändras adressen i en miljö som redan står räcker det med en rad:
+
+```
+az network nsg rule update \
+  --resource-group rg-novatrix-v34 \
+  --nsg-name nsg-web-v36 \
+  --name Allow-SSh \
+  --source-address-prefixes $(curl -s ifconfig.me)
+```
+
+### Hur designen växer
+
+| Behov | Vad man gör |
+|---|---|
+| Ny tjänst | Nytt subnät med egen NSG. `10.0.3.0/24` och uppåt är ledigt |
+| Fler regler | Prioritetsluckorna mellan 200 och 4095 räcker länge. Tydliga namn så listan går att läsa |
+| Fler webbservrar | En ASG i stället för att räkna upp IP-adresser, då gäller regeln gruppen |
+| Fler admin-adresser | Byt den enda adressen mot en lista: `ADMIN_IPS=("$(curl -s ifconfig.me)" "1.2.3.4")` och `--source-address-prefixes "${ADMIN_IPS[@]}"` |
+| Bygga någon annanstans | `RG=annan-grupp bash natverk-novatrix.sh` |
+
+Den fjärde raden är samma tanke som gruppmodellen i v35: behörighet läggs på en grupp, inte på en enskild. Här på nätverksnivå, där regeln pekar på en lista av betrodda källor i stället för på en adress.
