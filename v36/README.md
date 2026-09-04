@@ -45,8 +45,8 @@ snet-web  10.0.1.0/24  .../nsg-web-v36
 snet-db   10.0.2.0/24  .../nsg-db-v36
 ```
 
-![Subnäten](images/subnets.png)
-![Subnäten inkl. snet-admin, efter VG](images/subnat.png)
+<img src="images/subnets.png" alt="Subnäten" width="700">
+<img src="images/subnat.png" alt="Subnäten inkl. snet-admin, efter VG" width="700">
 
 ## 3. NSG:er
 
@@ -96,8 +96,8 @@ Allow-Web-To-Storage  100       10.0.1.0/24            Allow   TCP       443
 Deny-All-Inbound      4096      *                      Deny    *         *
 ```
 
-![nsg-web-v36](images/nsgwebv36.png)
-![nsg-db-v36](images/nsginbounddb36.png)
+<img src="images/nsgwebv36.png" alt="nsg-web-v36" width="700">
+<img src="images/nsginbounddb36.png" alt="nsg-db-v36" width="700">
 
 ## 4. Lösningen i nätverket
 
@@ -127,9 +127,9 @@ id-novatrix-app          Microsoft.ManagedIdentity/userAssignedIdentities
 
 `id-novatrix-app` är den hanterade identiteten från v35. Den rörde jag inte, den kopplas in först i v37.
 
-![vm-novatrix-web i snet-web](images/vmnovatrixoverview.png)
-![Effektiva säkerhetsregler för nic-web-v36](images/effectivrules.png)
-![Resursgruppen efter städning](images/renanovatrix.png)
+<img src="images/vmnovatrixoverview.png" alt="vm-novatrix-web i snet-web" width="700">
+<img src="images/effectivrules.png" alt="Effektiva säkerhetsregler för nic-web-v36" width="700">
+<img src="images/renanovatrix.png" alt="Resursgruppen efter städning" width="700">
 
 ## 5. Verifiering
 
@@ -145,9 +145,9 @@ Först med Network Watcher och IP flow verify, som simulerar ett paket och säge
 | `10.0.1.4:22` från `31.208.59.112` | Allowed | `Allow-SSh` |
 | `10.0.1.4:3389` från `8.8.8.8` | Denied | `Deny-All-Inbound` |
 
-![IP flow verify, port 80](images/verifyport80.png)
-![IP flow verify, SSH från min IP](images/verify22ok.png)
-![IP flow verify, SSH från främmande IP](images/verify22diny.png)
+<img src="images/verifyport80.png" alt="IP flow verify, port 80" width="700">
+<img src="images/verify22ok.png" alt="IP flow verify, SSH från min IP" width="700">
+<img src="images/verify22diny.png" alt="IP flow verify, SSH från främmande IP" width="700">
 
 Raden `10.0.1.4:22 från 31.208.59.112 → Allowed` gällde fram till hoppvärden byggdes. Efter VG-delen pekar `Allow-SSh` bara på admin-subnätet, inte på min adress — de uppdaterade testerna står i avsnitt 8.
 
@@ -171,11 +171,11 @@ curl.exe -I http://20.240.247.212   -> HTTP/1.1 200 OK
 
 Samma bild från båda hållen. Webben är öppen för alla, SSH bara för mig, resten stängt. Att en helt annan maskin når sidan men blir utelåst från SSH visar att regeln tittar på var trafiken kommer ifrån, inte bara vilken port det gäller.
 
-![Novatrix kundtjänstsida i webbläsaren](images/novatrixform.png)
+<img src="images/novatrixform.png" alt="Novatrix kundtjänstsida i webbläsaren" width="700">
 
 ## 6. Nätverksskiss
 
-![Nätverksdesign v36](images/natverksskiss-v36.png)
+<img src="images/natverksskiss-v36.png" alt="Nätverksdesign v36" width="700">
 
 ## 7. Resultat
 
@@ -287,10 +287,10 @@ Webbservern har med det ingen SSH-yta mot internet alls — ett skanningsförsö
 
 Ligger som skript: **[scripts/hoppvard-novatrix.sh](scripts/hoppvard-novatrix.sh)**, körd efter `natverk-novatrix.sh`. Sex block: subnätet, säkerhetsgruppen, dess två regler, kopplingen till subnätet, hoppvärds-VM:en (`--nsg ""`, skyddet ligger på subnätet), och sist ompekningen av webbens `Allow-SSh` från min adress till `10.0.3.0/24` — det sista blocket är det som skiljer VG från G.
 
-![Hela miljön efter VG](images/resursoversikt.png)
-![Effektiva säkerhetsregler på hoppvärdens nätverkskort](images/nsgadminv36effec.png)
-![Effektiva säkerhetsregler på webbens nätverkskort — Allow-SSh pekar nu på 10.0.3.0/24](images/nsgwebv36effec.png)
-![vm-novatrix-jump i snet-admin](images/vmjumpoverview.png)
+<img src="images/resursoversikt.png" alt="Hela miljön efter VG" width="450">
+<img src="images/nsgadminv36effec.png" alt="Effektiva säkerhetsregler på hoppvärdens nätverkskort" width="700">
+<img src="images/nsgwebv36effec.png" alt="Effektiva säkerhetsregler på webbens nätverkskort — Allow-SSh pekar nu på 10.0.3.0/24" width="700">
+<img src="images/vmjumpoverview.png" alt="vm-novatrix-jump i snet-admin" width="700">
 
 Inloggningen sker med ProxyJump (`-J`), så trafiken tunnlas genom hoppvärden och nyckeln aldrig lämnar en kopia där:
 
@@ -315,9 +315,9 @@ Direkt mot webben blir det timeout, inte "Permission denied" — beviset att NSG
 | `10.0.1.4:22` från `10.0.3.4` | Allowed | `Allow-SSh` (nsg-web-v36) |
 | `10.0.3.4:22` från min IP | Allowed | `Allow-SSh-Admin` (nsg-admin-v36) |
 
-![IP flow verify, SSH mot webben från internet](images/verify22webdeny.png)
-![IP flow verify, SSH mot webben från hoppvärden](images/verify22weballow.png)
-![IP flow verify, SSH mot hoppvärden från min IP](images/verify22jumpallow.png)
+<img src="images/verify22webdeny.png" alt="IP flow verify, SSH mot webben från internet" width="700">
+<img src="images/verify22weballow.png" alt="IP flow verify, SSH mot webben från hoppvärden" width="700">
+<img src="images/verify22jumpallow.png" alt="IP flow verify, SSH mot hoppvärden från min IP" width="700">
 
 Priset är en extra maskin — regionens kvot är 4 kärnor och minsta VM är 2, så webben och hoppvärden fyller den precis. I en riktig miljö hade kostnaden vägts mot nyttan; här är hoppvärden det uppgiften efterfrågar.
 
