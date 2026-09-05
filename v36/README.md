@@ -230,46 +230,6 @@ VNET="vnet-novatrix-v36"
 
 `$(...)` kör kommandot inuti och stoppar in svaret på platsen. Ingen IP-adress hamnar alltså i repot, och en kollega som kör skriptet får sin egen adress insläppt i stället för min.
 
-### Beviset: nätet byggt från noll
-
-Att skriptet ser rätt ut i filen betyder inte att det fungerar. Så jag skapade en tom resursgrupp, körde skriptet mot den och tittade på vad som kom ut.
-
-```
-az group create --name rg-novatrix-v36-test --location swedencentral
-RG=rg-novatrix-v36-test bash natverk-novatrix.sh
-
-az network vnet subnet list -g rg-novatrix-v36-test --vnet-name vnet-novatrix-v36 -o table
-
-Namn      NSG
---------  --------------------------------------
-snet-web  .../networkSecurityGroups/nsg-web-v36
-snet-db   .../networkSecurityGroups/nsg-db-v36
-
-az network nsg rule list -g rg-novatrix-v36-test --nsg-name nsg-web-v36 -o table
-
-Namn              Prio  Riktning  Kalla         Access
-----------------  ----  --------  ------------  ------
-Allow-Http-Https  100   Inbound   *             Allow
-Allow-SSh         200   Inbound   31.208.56.70  Allow
-Deny-All-Inbound  4096  Inbound   *             Deny
-
-az network nsg rule list -g rg-novatrix-v36-test --nsg-name nsg-db-v36 -o table
-
-Namn                  Prio  Riktning  Kalla        Access
---------------------  ----  --------  -----------  ------
-Allow-Web-To-Storage  100   Inbound   10.0.1.0/24  Allow
-Deny-All-Inbound      4096  Inbound   *            Deny
-
-az resource list -g rg-novatrix-v36-test -o table
-
-Namn               Typ
------------------  ---------------------------------------
-vnet-novatrix-v36  Microsoft.Network/virtualNetworks
-nsg-web-v36        Microsoft.Network/networkSecurityGroups
-nsg-db-v36         Microsoft.Network/networkSecurityGroups
-```
-
-Samma nät som det jag har i drift, byggt på under en minut utan att klicka någonstans. Sedan raderade jag testgruppen igen. Hela testet kostade noll kronor, eftersom VNet, subnät och NSG är gratis.
 
 ### Hoppvärd i stället för SSH mot webben
 
@@ -320,6 +280,15 @@ Direkt mot webben blir det timeout, inte "Permission denied" — beviset att NSG
 <img src="images/verify22jumpallow.png" alt="IP flow verify, SSH mot hoppvärden från min IP" width="700">
 
 Priset är en extra maskin — regionens kvot är 4 kärnor och minsta VM är 2, så webben och hoppvärden fyller den precis. I en riktig miljö hade kostnaden vägts mot nyttan; här är hoppvärden det uppgiften efterfrågar.
+
+### Alternativ jag testade: Azure Bastion
+
+För jämförelse testade jag också Azure Bastion — Microsofts egen tjänst för att nå en VM utan publik IP alls, direkt i webbläsaren.
+
+<img src="images/bastion3.png" alt="Anslutningsrutan i Azure Bastion" width="700">
+<img src="images/bastion2.png" alt="SSH-session mot vm-novatrix-web via Bastion" width="700">
+
+Fungerade utan att öppna en enda port mot internet. Skillnaden mot hoppvärden är kostnaden: Bastion tickar per timme den finns, oavsett om den används, och går inte att pausa — bara ta bort. Hoppvärden kan jag deallokera gratis när jag inte behöver den. Jag valde hoppvärd av det skälet här; Bastion (eller Just-In-Time-åtkomst) är ändå rätt väg i en miljö som ska stå permanent.
 
 ### Vilka hot designen skyddar mot
 
