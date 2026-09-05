@@ -30,6 +30,7 @@ Jag skapade ett eget VNet och delade det i två subnät, ett för webben och ett
 | `snet-web` | `10.0.1.0/24` | Publikt, för webbservern med formuläret |
 | `snet-db` | `10.0.2.0/24` | Privat subnät (ingen väg ut till internet), tomt än så länge, förberett för lagringen i v37 |
 | `snet-admin` | `10.0.3.0/24` | Admin-subnät, tillkom i VG-delen. Här står hoppvärden, se avsnitt 8 |
+| `AzureBastionSubnet` | `10.0.4.0/26` | Reserverat för Azure Bastion, som jag jämförde med i VG-delen (avsnitt 8). Namnet är obligatoriskt och Bastion kräver minst `/26` |
 | `default` | `10.0.0.0/24` | Standardsubnätet som skapades automatiskt, användes inte, borttaget |
 
 `/16` på nätet och `/24` per subnät, det räcker gott och är lätt att hålla ordning på. Poängen med uppdelningen är att webben och lagringen ska behandlas olika. Webben måste gå att nå utifrån, lagringen ska inte det. Kommer någon in via webben ska de inte komma åt lagringen på köpet.
@@ -38,11 +39,12 @@ Jag skapade ett eget VNet och delade det i två subnät, ett för webben och ett
 az network vnet subnet list -g rg-novatrix-v34 --vnet-name vnet-novatrix-v36 \
   --query "[].{Namn:name, Prefix:addressPrefixes[0], NSG:networkSecurityGroup.id}" -o table
 
-Namn      Prefix       NSG
---------  -----------  -----------------
-default   10.0.0.0/24
-snet-web  10.0.1.0/24  .../nsg-web-v36
-snet-db   10.0.2.0/24  .../nsg-db-v36
+Namn                Prefix       NSG
+------------------  -----------  -----------------
+snet-web            10.0.1.0/24  .../nsg-web-v36
+snet-db             10.0.2.0/24  .../nsg-db-v36
+snet-admin          10.0.3.0/24  .../nsg-admin-v36
+AzureBastionSubnet  10.0.4.0/26
 ```
 
 <img src="images/subnets.png" alt="Subnäten" width="700">
@@ -60,7 +62,7 @@ Varje subnät fick en egen nätverkssäkerhetsgrupp. Utgående trafik rörde jag
 | 200 | `Allow-SSh` | In | `31.208.59.112` | 22 | Allow | Jag måste kunna sköta servern, men bara jag |
 | 4096 | `Deny-All-Inbound` | In | `*` | `*` | Deny | Gör "stäng allt annat" tydligt i listan |
 
-Adressen i tabellen är den som gällde när jag dokumenterade, och den syns även i skärmdumparna. Min operatör har bytt den sedan dess, mer om det i avsnitt 8.
+Tabellen visar G-läget, som i skärmdumparna: `Allow-SSh` släpper in min egen adress rakt mot webben. I VG-delen (avsnitt 8) pekas regeln om till admin-subnätet `10.0.3.0/24`, så att SSH mot webben bara kan komma via hoppvärden. Adressen hann dessutom bytas av min operatör däremellan, också det i avsnitt 8.
 
 **`nsg-db-v36`** på `snet-db`:
 
@@ -79,13 +81,15 @@ I VG-delen tillkom en tredje säkerhetsgrupp, `nsg-admin-v36`, för hoppvärdens
 
 Det här är defense in depth i praktiken. Behörigheterna från v35 är ett lager. NSG:n framför webben är ett till. Att lagringen ligger i ett eget subnät som bara webben når är ett tredje. Och att SSH inte når webben direkt från internet, utan bara via hoppvärden (avsnitt 8), är ett fjärde. Går ett lager sönder finns nästa kvar.
 
+Utskrifterna nedan är tagna efter VG-delen. Därför står `10.0.3.0/24` som källa i `Allow-SSh` — i G-läget stod min egen adress där, som skärmdumpen visar.
+
 ```
 az network nsg rule list -g rg-novatrix-v34 --nsg-name nsg-web-v36 -o table
 
 Name              Priority  SourceAddressPrefixes  Access  Protocol  DestinationPortRanges
 ----------------  --------  ---------------------  ------  --------  ---------------------
 Allow-Http-Https  100       *                      Allow   TCP       80 443
-Allow-SSh         200       31.208.59.112          Allow   TCP       22
+Allow-SSh         200       10.0.3.0/24            Allow   TCP       22
 Deny-All-Inbound  4096      *                      Deny    *         *
 
 az network nsg rule list -g rg-novatrix-v34 --nsg-name nsg-db-v36 -o table
@@ -125,6 +129,8 @@ vm-novatrix-webPublicIP  Microsoft.Network/publicIPAddresses
 id-novatrix-app          Microsoft.ManagedIdentity/userAssignedIdentities
 ```
 
+Listan är från G-läget. Efter VG-delen tillkommer hoppvärden: `vm-novatrix-jump` med eget nätverkskort, publik IP och disk, plus säkerhetsgruppen `nsg-admin-v36`. Allt det står i avsnitt 8.
+
 `id-novatrix-app` är den hanterade identiteten från v35. Den rörde jag inte, den kopplas in först i v37.
 
 <img src="images/vmnovatrixoverview.png" alt="vm-novatrix-web i snet-web" width="700">
@@ -133,7 +139,7 @@ id-novatrix-app          Microsoft.ManagedIdentity/userAssignedIdentities
 
 ## 5. Verifiering
 
-Att reglerna syns i portalen bevisar bara att jag lagt in dem, inte att de gör något. Så jag testade på två sätt.
+Att reglerna syns i portalen bevisar bara att jag lagt in dem, inte att de gör något. Så jag testade på två sätt. Verifieringen här gäller G-läget; efter VG-delen tar hoppvärden över SSH-vägen och testerna görs om i avsnitt 8.
 
 Först med Network Watcher och IP flow verify, som simulerar ett paket och säger vilken regel som avgör:
 
@@ -247,10 +253,13 @@ Webbservern har med det ingen SSH-yta mot internet alls — ett skanningsförsö
 
 Ligger som skript: **[scripts/hoppvard-novatrix.sh](scripts/hoppvard-novatrix.sh)**, körd efter `natverk-novatrix.sh`. Sex block: subnätet, säkerhetsgruppen, dess två regler, kopplingen till subnätet, hoppvärds-VM:en (`--nsg ""`, skyddet ligger på subnätet), och sist ompekningen av webbens `Allow-SSh` från min adress till `10.0.3.0/24` — det sista blocket är det som skiljer VG från G.
 
-<img src="images/resursoversikt.png" alt="Hela miljön efter VG" width="450">
+<img src="images/snet-admin.png" alt="snet-admin, 10.0.3.0/24, skapat som privat subnät utan väg ut till internet" width="700">
+<img src="images/nsgadminv36.png" alt="nsg-admin-v36: bara Allow-SSh-Admin på port 22, sedan Deny-All-Inbound" width="700">
 <img src="images/nsgadminv36effec.png" alt="Effektiva säkerhetsregler på hoppvärdens nätverkskort" width="700">
+<img src="images/nsgwebv36v.png" alt="nsg-web-v36 efter VG: Allow-SSh finns kvar på port 22 men källan är nu admin-subnätet" width="700">
 <img src="images/nsgwebv36effec.png" alt="Effektiva säkerhetsregler på webbens nätverkskort — Allow-SSh pekar nu på 10.0.3.0/24" width="700">
 <img src="images/vmjumpoverview.png" alt="vm-novatrix-jump i snet-admin" width="700">
+<img src="images/resursoversikt.png" alt="Hela miljön efter VG" width="450">
 
 Inloggningen sker med ProxyJump (`-J`), så trafiken tunnlas genom hoppvärden och nyckeln aldrig lämnar en kopia där:
 
@@ -286,9 +295,10 @@ Priset är en extra maskin — regionens kvot är 4 kärnor och minsta VM är 2,
 För jämförelse testade jag också Azure Bastion — Microsofts egen tjänst för att nå en VM utan publik IP alls, direkt i webbläsaren.
 
 <img src="images/bastion3.png" alt="Anslutningsrutan i Azure Bastion" width="700">
+<img src="images/bastion1.png" alt="Inloggad på vm-novatrix-web i webbläsaren via Bastion — ingen publik IP, ingen öppen SSH-port" width="700">
 <img src="images/bastion2.png" alt="SSH-session mot vm-novatrix-web via Bastion" width="700">
 
-Fungerade utan att öppna en enda port mot internet. Skillnaden mot hoppvärden är kostnaden: Bastion tickar per timme den finns, oavsett om den används, och går inte att pausa — bara ta bort. Hoppvärden kan jag deallokera gratis när jag inte behöver den. Jag valde hoppvärd av det skälet här; Bastion (eller Just-In-Time-åtkomst) är ändå rätt väg i en miljö som ska stå permanent.
+Fungerade utan att öppna en enda port mot internet. Skillnaden mot hoppvärden är kostnaden: Bastion tickar per timme den finns, oavsett om den används, och går inte att pausa — bara ta bort. Hoppvärden kan jag deallokera gratis när jag inte behöver den. Jag valde hoppvärd av det skälet här; Bastion (eller Just-In-Time-åtkomst) är ändå rätt väg i en miljö som ska stå permanent. Själva Bastion-resursen tog jag bort efter testet så den inte skulle fortsätta kosta. `AzureBastionSubnet` lät jag ligga kvar — ett tomt subnät är gratis och gör att en ny Bastion kan resas på nolltid.
 
 ### Vilka hot designen skyddar mot
 
@@ -323,18 +333,17 @@ Koden löser halva problemet. `$(curl -s -4 https://ifconfig.me)` gör att adres
 Efter VG-delen lever risken bara kvar på `Allow-SSh-Admin` på hoppvärden — webbens `Allow-SSh` pekar nu på ett fast subnät i stället. Exakt samma lockout hände på den nya regeln under VG-bygget. Samma fix, nytt mål:
 
 ```
-az network nsg rule update \
-  --resource-group rg-novatrix-v34 \
-  --nsg-name nsg-admin-v36 \
-  --name Allow-SSh-Admin \
-  --source-address-prefixes $(curl -s -4 https://ifconfig.me)
+az network nsg rule update -g rg-novatrix-v34 --nsg-name nsg-admin-v36 \
+  --name Allow-SSh-Admin --source-address-prefixes $(curl -s -4 https://ifconfig.me)
 ```
+
+Den raden körde jag varje gång operatören bytt min adress och hoppvärden slutat svara — `$(curl -s -4 https://ifconfig.me)` hämtar den nya adressen och skriver in den i regeln på plats.
 
 ### Hur designen växer
 
 | Behov | Vad man gör |
 |---|---|
-| Ny tjänst | Nytt subnät med egen NSG. Hoppvärden tog `10.0.3.0/24`, `10.0.4.0/24` och uppåt är ledigt |
+| Ny tjänst | Nytt subnät med egen NSG. Hoppvärden tog `10.0.3.0/24` och Bastion-testet `10.0.4.0/26`. `10.0.5.0/24` och uppåt är ledigt |
 | Fler regler | Prioritetsluckorna mellan 200 och 4095 räcker länge. Tydliga namn så listan går att läsa |
 | Fler webbservrar | En ASG i stället för att räkna upp IP-adresser, då gäller regeln gruppen |
 | Fler admin-adresser | Byt den enda adressen mot en lista: `ADMIN_IPS=("$(curl -s -4 https://ifconfig.me)" "1.2.3.4")` och `--source-address-prefixes "${ADMIN_IPS[@]}"` |
