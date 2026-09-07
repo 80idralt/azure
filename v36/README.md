@@ -6,7 +6,7 @@
 
 **Klass:** MOV25
 
-**Datum:** 2026-09-04
+**Datum:** 2026-09-07
 
 ## Syfte
 
@@ -22,7 +22,7 @@ La till mappen för v36 och skrev den här README:n.
 
 ## 2. Virtuellt nätverk
 
-Jag skapade ett eget VNet och delade det i två subnät, ett för webben och ett för den kommande lagringen.
+Jag skapade ett eget VNet och delade det i två subnät till att börja med, ett för webben och ett för den kommande lagringen. Admin-subnätet och Bastion-subnätet kom till i VG-delen (avsnitt 8).
 
 | Namn | Adressintervall | Roll |
 |---|---|---|
@@ -73,7 +73,7 @@ Tabellen visar G-läget, som i skärmdumparna: `Allow-SSh` släpper in min egen 
 
 Längst ner i varje NSG ligger Azures egna regler, och den sista, `DenyAllInBound`, nekar allt som ingen tidigare regel har släppt igenom. Grundläget är alltså redan stängt.
 
-Jag la ändå in en egen `Deny-All-Inbound` överst bland mina regler i båda grupperna, men av två olika skäl. På webben är den mest för tydlighetens skull, så att "stäng allt annat" står i klartext i listan i stället för att bara vara underförstått. På det privata subnätet gör den verklig nytta: Azures inbyggda regler släpper in all trafik som kommer inifrån VNet:et, alltså även från `default`-subnätet och det jag bygger senare. Min neka-regel stänger den dörren, så att bara webben (`10.0.1.0/24`) faktiskt når lagringen.
+Jag la ändå in en egen `Deny-All-Inbound` överst bland mina regler i båda grupperna, men av två olika skäl. På webben är den mest för tydlighetens skull, så att "stäng allt annat" står i klartext i listan i stället för att bara vara underförstått. På det privata subnätet gör den verklig nytta: Azures inbyggda regler släpper in all trafik som kommer inifrån VNet:et, alltså även från andra subnät och det jag bygger senare. Min neka-regel stänger den dörren, så att bara webben (`10.0.1.0/24`) faktiskt når lagringen.
 
 Portalen sätter en varningstriangel på reglerna eftersom de går före Azures regel för trafik från lastbalanserare. Det gör inget här, det finns ingen lastbalanserare.
 
@@ -326,7 +326,7 @@ ssh: connect to host 20.240.247.212 port 22: Connection timed out
 
 Första tanken var att servern låg nere, men webbsidan svarade `200 OK`. Det var regeln som gjorde sitt jobb. Min operatör hade bytt min publika adress, och regeln såg en okänd källa och slängde paketen. Precis som den ska.
 
-Det säger två saker. Att begränsningen faktiskt fungerar, vilket är svårt att visa tydligare än så här. Och att **en IP-adress som skrivs in för hand blir fel förr eller senare** — den var rätt den dag jag skrev den och fel någon dagar senare.
+Det säger två saker. Att begränsningen faktiskt fungerar, vilket är svårt att visa tydligare än så här. Och att **en IP-adress som skrivs in för hand blir fel förr eller senare** — den var rätt den dag jag skrev den och fel några dagar senare.
 
 Koden löser halva problemet. `$(curl -s -4 https://ifconfig.me)` gör att adressen aldrig hamnar i repot och ett nybygge alltid får rätt adress. `-4` tvingar IPv4, och `https://` gör att svaret inte går att förfalska på vägen — utan den kunde en okrypterad anslutning manipuleras och sätta fel adress i regeln. Kvar är att jag litar på att tjänsten själv svarar rätt; i en produktionsmiljö hade jag använt Azure Bastion eller Just-In-Time-åtkomst i stället för en IP-adress som källa.
 
