@@ -1,0 +1,15 @@
+.gitattributes text eol=lf
+.gitignore     text eol=lf
+
+# Skalskript och cloud-init körs av Linux och måste ha LF. Med CRLF
+# kraschar de i Cloud Shell, t.ex. "bash: $'\r': command not found".
+*.sh           text eol=lf
+*.yaml         text eol=lf
+cloud-init.*   text eol=lf
+
+# Webbsidor och dokumentation, LF räcker och håller det konsekvent.
+*.html         text eol=lf
+*.md           text eol=lf
+
+# PowerShell körs på Windows, där CRLF är standard.
+*.ps1          text eol=crlf
