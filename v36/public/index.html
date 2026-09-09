@@ -55,26 +55,20 @@
         <p>Välkommen till Novatrix. Var vänligen använd formuläret nedan för att skapa ett ärende eller kontakta oss.</p>
         <br>
         
-        <!-- action="#" tills formuläret kopplas till lagringen. enctype och
-             fil-fältet är på plats redan nu, det är det som krävs för att en
-             bilaga ska kunna följa med i inskicket. -->
-        <form action="#" method="POST" enctype="multipart/form-data">
+        <!-- Formuläret skickar ingen data i det här skedet (action="#") -->
+        <form action="#" method="POST">
             <label for="name">Ditt namn:</label><br>
             <input type="text" id="name" name="name" required>
             <br>
-
+            
             <label for="email">Din E-post:</label><br>
             <input type="email" id="email" name="email" required>
             <br>
-
+            
             <label for="message">Meddelande:</label><br>
             <textarea id="message" name="message" rows="5" required></textarea>
             <br>
-
-            <label for="attachment">Bifogad fil:</label><br>
-            <input type="file" id="attachment" name="attachment" accept="image/*">
-            <br>
-
+            
             <button type="submit">Skicka ärende</button>
         </form>
     </div>
