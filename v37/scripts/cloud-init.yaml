@@ -1,0 +1,10 @@
+#cloud-config
+package_upgrade: true
+packages:
+- nginx
+- git
+runcmd:
+- git clone https://github.com/80idralt/azure.git /tmp/azure-repo
+- cp /tmp/azure-repo/v34/public/index.html /var/www/html/index.html
+- chown www-data:www-data /var/www/html/index.html
+- systemctl restart nginx
