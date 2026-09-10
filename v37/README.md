@@ -10,9 +10,9 @@
 
 ## Syfte
 
-Novatrix kundtjänst tar emot ärenden via ett webbformulär, men hittills har det bara varit en sida — inget som skickas in sparas någonstans. Den här veckan får lösningen ett lagringslager: ett ställe dit inskickade ärenden och bifogade filer hamnar, skilt från servern, så att data finns kvar även om servern byts ut. Åtkomsten ska vara säkrad, inget ska ligga öppet.
+Novatrix kundtjänst tar emot ärenden via ett webbformulär, men hittills har det bara varit en sida inget som skickas in sparas någonstans. Den här veckan får lösningen ett lagringslager: ett ställe dit inskickade ärenden och bifogade filer hamnar, skilt från servern, så att data finns kvar även om servern byts ut. Åtkomsten ska vara säkrad, inget ska ligga öppet.
 
-Lagringen och säkerheten runt den gjorde jag först för hand i portalen, sedan som kod. Att koppla in själva formuläret görs på labben och beskrivs i avsnitt 3.
+Lagringen och säkerheten runt den gjorde jag först för hand i portalen, sedan som kod.
 
 ## Utgångsläge
 
@@ -20,7 +20,7 @@ Jag bygger vidare på samma miljö som förut, `rg-novatrix-v34` i `swedencentra
 
 - `vm-novatrix-web` från v34, nu i `snet-web` efter v36
 - Behörighetsmodellen och den hanterade identiteten `id-novatrix-app` från v35
-- `snet-db` från v36 — ett privat subnät utan väg ut till internet, förberett för just lagringen. `nsg-db-v36` har redan regeln `Allow-Web-To-Storage` (443 från webbsubnätet)
+- `snet-db` från v36, ett privat subnät utan väg ut till internet, förberett för just lagringen. `nsg-db-v36` har redan regeln `Allow-Web-To-Storage` (443 från webbsubnätet)
 
 `id-novatrix-app` skapade jag i v35 med kommentaren att den skulle kopplas ihop med lagringen först nu. Det är det som händer den här veckan.
 
@@ -28,7 +28,7 @@ Jag bygger vidare på samma miljö som förut, `rg-novatrix-v34` i `swedencentra
 
 La till mappen för v37 med `scripts/`, `images/` och `public/`, och skrev den här README:n. La också en `.gitattributes` i repot som tvingar LF-radbrytningar på skalskript och YAML, så att skript och cloud-init inte går sönder när de körs på Linux.
 
-I `scripts/` ligger nu inte bara veckans lagringsskript utan hela kedjan som bygger miljön från v34 och framåt. Tanken är att allt ska finnas samlat på ett ställe inför IaC-veckan. Mer om det i avsnitt 6.
+I `scripts/` ligger hela kedjan som bygger miljön från v34 och framåt, inte bara veckans lagringsskript, allt samlat på ett ställe. Mer om det i avsnitt 6.
 
 ## 2. Skapa lagringen
 
@@ -52,12 +52,10 @@ Jag skapade kontot i portalen under **Storage accounts → Create**, i `rg-novat
 Ett ärende är färskt när det kommer in. Supporten öppnar det, läser bilagan, svarar kunden, ofta flera gånger de första dagarna. Sedan blir det tyst. Lagringsnivån i Azure är en avvägning mellan vad det kostar att förvara data och vad det kostar att läsa den:
 
 - **Hot** — dyrast per lagrad GB, men billigast per läsning och ingen avgift för att hämta data. För data som läses ofta.
-- **Cool** — billigare lagring, dyrare läsning, datan ska ligga kvar minst 30 dagar. För sällanläst data.
-- **Archive** — billigast av alla att förvara, men datan ligger offline och tar timmar att återställa, minst 180 dagar. För ren arkivdata.
+- **Cool / Cold** — billigare lagring, dyrare läsning, datan ska ligga kvar en viss minsta tid. För sällanläst data.
+- **Archive** — billigast av alla att förvara, men datan ligger offline och måste tinas i timmar innan den kan läsas. För rena arkiv.
 
-Novatrix ärenden läses aktivt när de är aktuella, så Hot är rätt nivå: läsningarna blir billiga och svarstiden direkt. Att lägga aktiva ärenden på Cool hade sparat nästan ingenting på lagringen, eftersom datamängden är liten, men gjort varje läsning dyrare. Hot + LRS är alltså ett medvetet val — Hot för att datan läses ofta, LRS för att en labbmiljö med testdata inte behöver kopior i en annan region.
-
-Ett rimligt nästa steg vore en livscykelregel som automatiskt flyttar ärenden äldre än till exempel sex månader till Cool. Då får man arkivbesparingen på det gamla utan att offra prestanda på det som är aktuellt.
+Novatrix ärenden läses aktivt när de är aktuella, så Hot är rätt nivå: läsningarna blir billiga och svarstiden direkt. Att lägga aktiva ärenden på Cool hade sparat nästan ingenting på lagringen, eftersom datamängden är liten, men gjort varje läsning dyrare. Cool eller Archive hade blivit aktuellt först för ärenden som ska sparas långt efter att de stängts, vilket inte är fallet här. Hot + LRS är alltså ett medvetet val, Hot för att datan läses ofta, LRS för att en labbmiljö med testdata inte behöver kopior i en annan region.
 
 Kryptering i vila är på automatiskt, Azure sköter det, inget att slå på.
 
@@ -79,17 +77,68 @@ https://stnovatrixv37idr.blob.core.windows.net/arenden/arendebild.jpg
 
 ### Kontot i text
 
+`az storage account show` med de fält som är relevanta för uppgiften:
+
 ```
-[ Klistras in: az storage account show -g rg-novatrix-v34 -n stnovatrixv37idr -o table ]
+az storage account show -g rg-novatrix-v34 -n stnovatrixv37idr \
+  --query "{Namn:name, Niva:accessTier, Kontotyp:kind, Region:location, HttpsKrav:enableHttpsTrafficOnly, MinTls:minimumTlsVersion, AnonymBlob:allowBlobPublicAccess, Nyckelatkomst:allowSharedKeyAccess, PubliktNat:publicNetworkAccess}" -o table
+
+Namn              Niva    Kontotyp    Region         HttpsKrav    MinTls    AnonymBlob    Nyckelatkomst    PubliktNat
+----------------  ------  ----------  -------------  -----------  --------  ------------  ---------------  ------------
+stnovatrixv37idr  Hot     StorageV2   swedencentral  True         TLS1_2    False         True             Enabled
 ```
+
+`Niva Hot`, `Kontotyp StorageV2` och `MinTls TLS1_2` är valen från tabellen ovan. `HttpsKrav True` och `AnonymBlob False` är de stängda dörrarna från avsnitt 4.1. `Nyckelatkomst True` är shared key som står kvar i standardläge (avsnitt 4.2).
 
 ## 3. Koppla formuläret till lagringen
 
-Görs på labben. Kort sagt: en liten mottagare på `vm-novatrix-web` tar emot det inskickade formuläret och lägger ärendet, plus en eventuell bifogad bild, som blobar i containern `arenden`. Mottagaren skriver via `id-novatrix-app` — ingen nyckel i koden.
+Formuläret på webbsidan är statiskt. En sida i webbläsaren har ingen identitet och kan inte logga in mot lagringen, så själva skrivningen måste ske på servern. Jag la därför till en liten mottagare på `vm-novatrix-web`.
 
-I `public/index.html` är fil-fältet och `enctype="multipart/form-data"` redan på plats. Det som återstår är att peka `action` mot mottagaren.
+### Så går ett ärende in
 
-Verifieringen att ett inskickat testärende faktiskt hamnar i containern hör till det här momentet och redovisas i avsnitt 5.
+```
+webbläsare  --POST /submit-->  nginx  --vidare-->  mottagaren (127.0.0.1:5000)  --skriver-->  containern arenden
+```
+
+- Formuläret (`public/index.html`) postar till `/submit` med `enctype="multipart/form-data"` så en bild följer med.
+- nginx serverar sidan som förut och skickar `/submit` vidare till mottagaren. Port 5000 nås aldrig utifrån.
+- Mottagaren (`app/app.py`, Flask) tar emot namn, e-post, meddelande och en eventuell bild. Den ger ärendet ett id av tidsstämpel plus en slumpdel och skriver två blobar under `<id>/`: `arende.json` med texten, och bilden bredvid.
+- Inloggningen mot lagringen görs med `id-novatrix-app` via `DefaultAzureCredential`. Ingen nyckel, inget lösenord i koden. Kontonamn och identitetens client-id sätts som miljövariabler på servern, inte i filen.
+
+### Delarna på servern
+
+| Del | Vad den gör |
+|---|---|
+| `/opt/novatrix/` med egen Python-miljö | mapp för appen, biblioteken hålls skilda från systemets |
+| [`app/app.py`](app/app.py) | tar emot inskicket och skriver ärendet till containern |
+| [`app/novatrix-form.service`](app/novatrix-form.service) | kör appen som en tjänst, startar den vid boot och om den kraschar |
+| [`app/nginx-arende.conf`](app/nginx-arende.conf) | serverar sidan och skickar `/submit` vidare, höjer `client_max_body_size` så bilden får plats |
+
+Kärnan i `app/app.py`:
+
+```python
+@app.post("/submit")
+def submit():
+    namn = request.form.get("name", "").strip()
+    epost = request.form.get("email", "").strip()
+    meddelande = request.form.get("message", "").strip()
+
+    stampel = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%S")
+    arende_id = f"arende-{stampel}-{uuid.uuid4().hex[:6]}"
+
+    arende = {"id": arende_id, "namn": namn, "epost": epost,
+              "meddelande": meddelande, "skapat": stampel}
+    container.upload_blob(f"{arende_id}/arende.json",
+                          json.dumps(arende, ensure_ascii=False).encode("utf-8"),
+                          overwrite=True)
+
+    bilaga = request.files.get("attachment")
+    if bilaga and bilaga.filename:
+        container.upload_blob(f"{arende_id}/{bilaga.filename}",
+                              bilaga.stream, overwrite=True)
+```
+
+Att ett inskickat ärende faktiskt hamnar i containern verifieras i avsnitt 5.
 
 ## 4. Säkra åtkomsten
 
@@ -108,22 +157,41 @@ Nyare konton har anonym åtkomst avstängd som standard, men jag bekräftade det
 
 ### 4.2 Appen når lagringen via hanterad identitet, inte nyckel
 
-En åtkomstnyckel ger full åtkomst till hela kontot, har ingen tidsgräns och går inte att spåra till en person. Hamnar den i kod är kontot i praktiken öppet. Därför använder appen en hanterad identitet i stället — Azure sköter inloggningen och det finns inget lösenord som kan läcka.
-
-Jag hängde `id-novatrix-app` på webbservern under **vm-novatrix-web → Identity → User assigned**, och gav den sedan rollen **Storage Blob Data Reader** på storage-kontot under **Access control (IAM)**.
+Jag hängde `id-novatrix-app` på webbservern under **vm-novatrix-web → Identity → User assigned**.
 
 <img src="images/vmidentity.png" alt="id-novatrix-app kopplad till vm-novatrix-web" width="750">
-<img src="images/rolltilldelad.png" alt="Storage Blob Data Reader tilldelad id-novatrix-app, scope This resource" width="750">
 
-**User-assigned, inte VM:ens egen.** En VM kan ha en inbyggd (system-assigned) identitet som föds och dör med maskinen. `id-novatrix-app` är i stället fristående — den överlevde att VM:en raderades och byggdes om i v36, och den är den identitet jag förberedde för det här redan i v35.
+**User-assigned, inte VM:ens egen.** En VM kan ha en inbyggd (system-assigned) identitet som föds och dör med maskinen. `id-novatrix-app` är i stället fristående, den överlevde att VM:en raderades och byggdes om i v36, och den är den identitet jag förberedde för det här redan i v35.
 
-Rollen är i skrivande stund **Storage Blob Data Reader** — läsa och lista blobar. När formuläret kopplas in (avsnitt 3) byter jag den mot **Storage Blob Data Contributor** med containern `arenden` som scope, så att appen får skriva ärenden men bara dit, inget annat på kontot. Det är least privilege: minsta behörighet som räcker för uppgiften.
+**Rollen: Storage Blob Data Contributor på containern.** Först gav jag identiteten `Storage Blob Data Reader` på hela kontot. När formuläret skulle kopplas in räckte inte läsrätt, så jag bytte till `Storage Blob Data Contributor` med containern `arenden` som enda scope, och tog bort Reader. Nu kan appen läsa och skriva ärenden i den containern, inget annat på kontot. Det är least privilege på datanivå: minsta behörighet som räcker för jobbet.
 
-Nyckelåtkomsten (shared key) är kvar i kontots standardläge, påslagen — jag stängde inte av den. RBAC via den hanterade identiteten är den robusta metoden, och att helt stänga av nycklarna är ett extra steg som inte krävs här.
+Rollen är en dataroll, skild från rollerna på själva kontot. `Owner` och `Contributor` som ligger på mitt konto och grupperna styr resursen, alltså vem som får skapa, ändra och radera storage-kontot. De ger ingen åtkomst till filerna inuti. Mer om den skillnaden i avsnitt 5.
+
+<img src="images/roll.png" alt="Storage Blob Data Contributor på containern arenden, tilldelad id-novatrix-app" width="750">
+
+Kontroll med `az`:
+
+```
+az role assignment list --assignee <id-novatrix-app principalId> --all -o table
+
+Principal                             Role                           Scope
+------------------------------------  -----------------------------  ------------------------------------------------------
+0a942410-a7fa-4436-a32a-47ed9f215e03  Storage Blob Data Contributor  .../storageAccounts/stnovatrixv37idr/.../containers/arenden
+```
+
+#### Nyckelåtkomst kontra identitet
+
+När ett storage account skapas får det två kontonycklar långa strängar som låser upp allt på kontot: läsa, skriva, radera, ändra inställningar. De går inte att spåra till en person och de slutar aldrig gälla av sig själva. En SAS byggs dessutom ovanpå en av de här nycklarna.
+
+Inställningen `AllowSharedKeyAccess` styr om nycklarna, och SAS:er som vilar på dem, fungerar över huvud taget. Den är påslagen som standard och jag lät den vara det. Skälet är att jag använder en kort läs-SAS för tillfällig delning (avsnitt 4.3) stänger jag av nyckelåtkomsten helt slutar den SAS:en att fungera.
+
+Att kontot *har* nycklar är inte problemet. Problemet uppstår först om en nyckel läcker, till exempel genom att hamna i kod. Appen rör aldrig nycklarna — den går in via den hanterade identiteten och RBAC, och där finns ingen hemlighet som kan komma på avvägar. Bilden är ungefär: kontonyckeln är husets huvudnyckel som passar alla dörrar och ligger kvar i kassaskåpet; identiteten är ett personligt passerkort som loggar varje dörr det öppnar och kan spärras för sig. Jag gav appen ett passerkort i stället för en kopia av huvudnyckeln.
+
+Att helt stänga av nyckelåtkomsten (`--allow-shared-key-access false`) är en rimlig skärpning som tvingar all åtkomst genom Entra ID. Det är ett extra steg som uppgiften inte kräver, och det skulle slå ut SAS-delen jag visar här.
 
 ### 4.3 SAS för tillfällig delning
 
-Ska en bilaga delas tillfälligt med en tekniker vill jag inte lämna ut en nyckel. Då genererar jag i stället en SAS — en signerad länk med exakt de rättigheter och den tid jag väljer.
+Ska en bilaga delas tillfälligt med en tekniker vill jag inte lämna ut en nyckel. Då genererar jag i stället en SAS, en signerad länk med exakt de rättigheter och den tid jag väljer.
 
 På `arendebild.jpg` → **Generate SAS** satte jag:
 
@@ -140,53 +208,82 @@ Snävast möjliga: bara läsa, bara den filen, kort tid. Går den ut slutar den 
 
 ### 4.4 Begränsa nätverksåtkomsten
 
-Görs denna vecka. Utöver behörigheterna lägger jag ett nätverkslager framför kontot: standardåtgärden sätts till **Neka**, och bara `snet-db` släpps in, via en privat endpoint. Det knyter an till v36, där `nsg-db-v36` redan har regeln `Allow-Web-To-Storage` (443 från webbsubnätet) — nu finns det en tjänst bakom den regeln. Vid behov kan jag också lägga till min egen IP för att kunna administrera kontot.
+Behörigheterna styr *vem* som får göra vad. Nätverksregeln styr *varifrån*. Jag la en brandvägg framför kontot, ungefär som NSG:n framför webbservern i v36: standardåtgärden är **Neka**, och bara två källor släpps in.
+
+- **`snet-web`**, subnätet där webbservern står, via en service endpoint för `Microsoft.Storage`. När VM:en pratar med lagringen känner Azure igen att trafiken kommer från det subnätet och släpper in den.
+- **Min egen IP**, för att kunna administrera kontot och bläddra i containern från portalen.
+
+```
+az network vnet subnet update -g rg-novatrix-v34 --vnet-name vnet-novatrix-v36 \
+    -n snet-web --service-endpoints Microsoft.Storage
+
+az storage account network-rule add -g rg-novatrix-v34 --account-name stnovatrixv37idr \
+    --vnet-name vnet-novatrix-v36 --subnet snet-web
+
+az storage account network-rule add -g rg-novatrix-v34 --account-name stnovatrixv37idr \
+    --ip-address <min publika IP>
+
+az storage account update -g rg-novatrix-v34 -n stnovatrixv37idr --default-action Deny
+```
+
+```
+az storage account network-rule list -g rg-novatrix-v34 --account-name stnovatrixv37idr
+
+defaultAction   Deny
+virtualNetworkRules   .../virtualNetworks/vnet-novatrix-v36/subnets/snet-web   (Allow, Succeeded)
+ipRules   <min publika IP>
+```
+
+**Service endpoint på `snet-web`, inte privat endpoint i `snet-db`.** I v36 förberedde jag `snet-db` med regeln `Allow-Web-To-Storage` för en privat endpoint. Men webbservern står i `snet-web`, och det är därifrån trafiken kommer, så en service endpoint på just det subnätet är den kortare vägen och räcker för uppgiften. En privat endpoint i `snet-db` hade också fungerat men krävt en extra resurs och en privat DNS-zon.
+
+`publicNetworkAccess` står kvar som `Enabled`. Det betyder att den publika adressen finns, men den styrs nu av nätverksreglerna: bara `snet-web` och min IP kommer förbi.
 
 ### Åtkomsten i översikt
 
-Så här ser åtkomsten till lagringen ut när veckan är klar:
-
-| Container | Åtkomstmetod | Vem når vad |
+| Container / konto | Åtkomstmetod | Vem når vad |
 |---|---|---|
-| `arenden` | RBAC via hanterad identitet | `id-novatrix-app` läser och skriver ärenden och bilagor. Inget anonymt. |
-| `arenden`, enskild blob | Kort läs-SAS | Tillfällig delning med t.ex. en tekniker: bara läsa, bara den filen, HTTPS, tidsbegränsat |
-| Kontot | Nätverksregel | Bara `snet-db` via privat endpoint, plus min IP vid behov. Allt annat nekas. |
+| `arenden` | RBAC via hanterad identitet | `id-novatrix-app` läser och skriver ärenden och bilagor (roll Storage Blob Data Contributor, scope: containern). Inget anonymt. |
+| `arenden`, enskild blob | Kort läs-SAS | Tillfällig delning: bara läsa, bara den filen, HTTPS, tidsbegränsat |
+| Kontot | Nätverksregel, standard Neka | Bara `snet-web` (service endpoint) och min admin-IP. Allt annat nekas på nätverksnivå. |
 
-Skrivrollen (avsnitt 4.2) och nätverksraden (avsnitt 4.4) är på plats när de momenten är klara.
+## 5. Verifiera
 
-## 5. Verifiera och dokumentera
-
-Att inställningarna syns i portalen bevisar bara att jag gjort dem. Så jag testade åtkomsten:
+Att inställningarna syns i portalen bevisar bara att jag gjort dem. Så jag testade både att inskicket fungerar och att åtkomsten är stängd:
 
 | Test | Vad jag gjorde | Resultat |
 |---|---|---|
-| Naken blob-URL | Öppnade blob-adressen utan SAS i ett inkognitofönster | **Nekad** — `PublicAccessNotPermitted` |
-| Giltig SAS | Öppnade samma blob med `?sp=r&...&sig=...` | **Bilden visas** |
+| Inskickat ärende med bilaga | Fyllde i formuläret på webben, bifogade en bild, tryckte Skicka (efter att nätverksregeln var på) | **Sparas** — mappen `arende-2026-09-10-122941-a8ecba/` med `arende.json` och bilden i `arenden`. Serverns logg: `POST /submit ... 200` |
+| Naken blob-URL, anonymt | Öppnade blob-adressen utan SAS i inkognitofönster | **Nekad** — `PublicAccessNotPermitted` (anonym åtkomst är av) |
+| Blob-URL från IP utanför nätverksregeln | Öppnade samma adress från min laptop efter att brandväggen slagits på | **Nekad** — `AuthorizationFailure`, "This request is not authorized to perform this operation" (nätverkslagret) |
+| Giltig SAS | Öppnade blobben med `?sp=r&...&sig=...` (innan nätverksregeln) | **Bilden visas** |
 | Utgången SAS | Skapade en SAS med kort giltighet, öppnade efter att tiden gått ut | **Nekad** — `AuthenticationFailed`, "Signature not valid in the specified time frame" |
 | Eget konto mot blob-data | Bytte till "Microsoft Entra user account" i containern | **Nekad** — "You do not have permissions to list the data" |
-| Inskickat testärende | Skickade in formuläret med en bilaga | *Görs på labben — ärendet ska hamna i `arenden`* |
-| Åtkomst från ej tillåten IP | Nådde kontot från en adress utanför nätverksregeln | *Görs efter 4.4 — ska blockeras* |
 
+Inskicket gick från webbläsaren över internet, in genom nginx, vidare till mottagaren, som skrev till lagringen via `id-novatrix-app`. Att formuläret fungerar *efter* att nätverksregeln slagits på visar att webbservern i `snet-web` fortfarande når kontot, medan min egen laptop nekas. Det är flera lager: anonym åtkomst av, brandvägg framför kontot, och RBAC på datan.
+
+<img src="images/tack.png" alt="Tack-sidan med ärende-id efter inskick" width="600">
+<img src="images/arendeinnehall.png" alt="Mappen arende-...-a8ecba med arende.json och bilden" width="750">
 <img src="images/naknaurl.png" alt="Naken URL nekas: PublicAccessNotPermitted" width="750">
+<img src="images/webfailure.png" alt="Blob-URL från laptop nekas av nätverksregeln: AuthorizationFailure" width="750">
 <img src="images/lankbild.png" alt="Giltig SAS: bilden visas i webbläsaren" width="500">
 <img src="images/nekadsas.png" alt="Utgången SAS nekas: AuthenticationFailed" width="750">
 <img src="images/switchentra.png" alt="Eget konto nekas läsa blob-data trots Owner" width="700">
 
-Det fjärde testet är det intressanta. Jag är Owner på prenumerationen, men Owner styr *kontot* — vem som får skapa, ändra och radera själva resursen. Det säger ingenting om *datan* inuti. För att läsa blobar krävs en egen dataroll (`Storage Blob Data Reader` eller `Contributor`), och den har mitt konto inte. Samma least privilege-tanke som förut, nu på datanivå.
+Testet med mitt eget konto är det intressanta. Jag är Owner på prenumerationen, men Owner styr *kontot* — vem som får skapa, ändra och radera själva resursen. Det säger ingenting om *datan* inuti. För att läsa blobar krävs en egen dataroll (`Storage Blob Data Reader` eller `Contributor`), och den har mitt konto inte. Samma least privilege-tanke som förut, nu på datanivå.
 
 ## 6. VG — Lagringen som kod och robust åtkomst
 
 ### 6.1 Lagringen som kod
 
-Lagringen finns som kod i `scripts/storage-novatrix.sh`: skapa kontot med rätt nivå och redundans, skapa containern privat, koppla `id-novatrix-app` till webbservern och ge den rollen på blob-data. Kör man filen byggs lagringen upp på nytt utan ett enda portalklick.
+Lagringen finns som kod i [`scripts/storage-novatrix.sh`](scripts/storage-novatrix.sh). Skriptet skapar kontot med rätt nivå och redundans, skapar containern privat, kopplar `id-novatrix-app` till webbservern, ger den skrivbehörighet på containern och låser till sist kontot till webb-subnätet — i den ordningen, eftersom varje steg bygger på det föregående. Kör man filen byggs lagringen upp på nytt utan ett enda portalklick.
 
-Skriptet har inga hemligheter i sig — det loggar in med `--auth-mode login` och använder identitetens objekt-id, inte en nyckel. Värden som kan behöva ändras, som kontonamn och resursgrupp, ligger överst som variabler.
+Filen har inga hemligheter i sig. Den loggar in med `--auth-mode login` och slår upp identitetens objekt-id vid körning i stället för att spara en nyckel. Värden som kan behöva ändras — kontonamn, resursgrupp — ligger överst som variabler med `${VAR:-standardvärde}`, så samma fil kan köras mot en testmiljö utan att ändras.
 
-*Fullständig listning läggs in när skriptet matchar portalarbetet (rollbyte + nätverksregel).*
+Mottagaren som kopplar formuläret till lagringen ligger också som kod: [`app/app.py`](app/app.py), tjänstefilen [`app/novatrix-form.service`](app/novatrix-form.service) och [`app/nginx-arende.conf`](app/nginx-arende.conf). Avsnitt 3 beskriver hur de sätts upp på servern. Kontonamn och identitetens client-id sätts som miljövariabler av tjänsten, inte i koden.
 
 ### 6.2 Hela miljön som en kedja
 
-`scripts/` samlar nu skripten från alla veckor på ett ställe:
+`scripts/` samlar skripten från alla veckor på ett ställe:
 
 | Skript | Bygger | Från vecka |
 |---|---|---|
@@ -196,25 +293,39 @@ Skriptet har inga hemligheter i sig — det loggar in med `--auth-mode login` oc
 | `hoppvard-novatrix.sh` | Hoppvärden | v36 (VG) |
 | `storage-novatrix.sh` | Lagringen | v37 |
 
-Lagringen hänger ihop med resten på två punkter. **Identiteten:** `storage-novatrix.sh` kopplar `id-novatrix-app` till `vm-novatrix-web`, samma identitet som skapades i v35, så att appen på servern kan nå blob-data utan lösenord. **Nätverket:** kontot ska bara nås från `snet-db` (avsnitt 4.4), subnätet som byggdes i v36 just för det här, med en NSG-regel som redan pekar från webben mot lagringen.
+Lagringen hänger ihop med resten på två punkter. **Identiteten:** `id-novatrix-app` skapades i v35 och kopplas till `vm-novatrix-web`, så att appen på servern kan nå blob-data utan lösenord. **Nätverket:** kontot är låst till `snet-web` via en service endpoint (avsnitt 4.4), samma VNet som byggdes i v36. Webbservern, identiteten och lagringen sitter alltså ihop i samma miljö, och trafiken mellan dem lämnar aldrig Azure.
 
-Nästa vecka samlas allt det här i en ARM-mall. Att skripten redan ligger samlade och använder samma namn och samma resursgrupp gör det steget mindre.
+Alla skript använder samma namngivning och samma resursgrupp. Det pekar mot nästa kurssteg, där miljön samlas i en ARM-mall.
 
-### 6.3 Robust åtkomst
+### 6.3 Svar på uppgiftens frågor
 
-Görs klart när rollen är bytt (avsnitt 4.2). Kärnan: appen når lagringen via den hanterade identiteten med en roll som bara gäller containern `arenden`, i stället för en kontonyckel. Det är robustare på fyra sätt — det finns ingen hemlighet som kan läcka, behörigheten är avgränsad till en container, varje anrop loggas mot en identitet, och identiteten överlever att servern byggs om (vilket hände i v36). En kontonyckel ger i stället full åtkomst till hela kontot, har ingen utgångstid och går inte att spåra till någon.
+VG-delen ställer några frågor. Här är svaren samlade.
+
+**Vilken lagringsnivå passar data som läses ofta, och varför?**
+Hot. Den har högst pris per lagrad GB men lägst pris per läsning och ingen hämtningsavgift. Novatrix ärenden läses aktivt de första dagarna, så Hot blir billigast totalt och svarstiden är direkt. Hela avvägningen står i avsnitt 2.
+
+**Vilken nivå passar sällanläst eller ren arkivdata, och varför?**
+Cool eller Cold för sällanläst: billigare lagring, dyrare läsning, en minsta lagringstid. Archive för rena arkiv: billigast av alla, men datan måste tinas i timmar innan den går att läsa. Det passar data som ska sparas långt efter att den slutat användas, inte aktiva ärenden.
+
+**Vilket åtkomstsätt är mest spårbart och lättast att återkalla, och varför?**
+RBAC via en identitet. Varje anrop görs av en namngiven identitet och syns i loggarna, och behörigheten tas bort med ett kommando utan att något annat påverkas. En kontonyckel är inte kopplad till någon och måste roteras, vilket slår mot allt som använder den. En SAS går inte att dra tillbaka i förväg, den lever tills den går ut.
+
+**Varför är least privilege ett VG-krav?**
+För att det begränsar skadan när något går fel. Får en identitet bara den behörighet uppgiften kräver, och den kapas, blir det en liten incident i stället för en stor — angriparen kommer inte åt mer än den lilla yta identiteten hade.
+
+**Varför är den här metoden robustare än en delad nyckel?**
+Appen når lagringen via den hanterade identiteten och RBAC:
+
+- **Ingen hemlighet finns** — Azure sköter inloggningen, inget lösenord i koden som kan läcka.
+- **Det är spårbart** — anropen loggas mot en identitet.
+- **Det är lätt att återkalla** — en rolltilldelning bort med ett kommando.
+- **Det överlever driften** — identiteten är fristående och påverkades inte av att servern byggdes om i v36.
+
+En kontonyckel ger i stället full åtkomst till hela kontot, har ingen utgångstid och går inte att spåra till en person.
+
+**Kan en kollega återskapa lagringen från koden?**
+Ja. `scripts/storage-novatrix.sh` har alla kommandon i rätt ordning, inga hemligheter, och de värden som kan variera ligger som variabler överst. Kör filen och samma lagring byggs upp.
 
 ## Städning
 
-Resursgruppen `rg-novatrix-v34` står kvar — hela miljön byggs vidare på den. VM:en stoppar jag när jag inte jobbar, den kostar medan den kör. Lagringen får ligga kvar till IaC-veckan. Testinnehållet är någon enstaka fil och kostar i praktiken ingenting.
-
-## Kvar att göra
-
-- Koppla formuläret så att ett inskickat ärende och en bilaga hamnar i `arenden` (avsnitt 3)
-- Byt appens roll till Storage Blob Data Contributor på containern (avsnitt 4.2)
-- Begränsa nätverksåtkomsten till kontot (avsnitt 4.4)
-- Verifiera de två sista testerna i avsnitt 5
-- Klistra in `az storage account show -o table` som text i avsnitt 2
-- Färdigställ VG-avsnittet (6.1, 6.3) när koden matchar portalarbetet
-- Döp om `lagring-novatrix.sh` till `storage-novatrix.sh`
-- Bocka av v37 i rot-README vid inlämning
+Resursgruppen `rg-novatrix-v34` står kvar, hela miljön byggs vidare på den. VM:en stoppar jag när jag inte jobbar, den kostar medan den kör. Lagringen ligger kvar. Testinnehållet är någon enstaka fil och kostar i praktiken ingenting.
