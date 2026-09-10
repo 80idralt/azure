@@ -1,0 +1,20 @@
+# systemd-tjänst för Novatrix ärendemottagare (v37).
+# Läggs som /etc/systemd/system/novatrix-form.service på webbservern.
+# Kör app.py som www-data. Kontonamn och identitet sätts som miljövariabler
+# här, inte i koden. Byt STORAGE_ACCOUNT och AZURE_CLIENT_ID vid återanvändning.
+[Unit]
+Description=Novatrix arendemottagare (Flask)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=www-data
+WorkingDirectory=/opt/novatrix
+Environment=STORAGE_ACCOUNT=stnovatrixv37idr
+Environment=CONTAINER=arenden
+Environment=AZURE_CLIENT_ID=0a942410-a7fa-4436-a32a-47ed9f215e03
+ExecStart=/opt/novatrix/venv/bin/python /opt/novatrix/app.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

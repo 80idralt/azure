@@ -51,9 +51,12 @@ def submit():
     epost = request.form.get("email", "").strip()
     meddelande = request.form.get("message", "").strip()
 
-    # 2. Ge ärendet ett unikt id: tidsstämpel plus en kort slumpdel.
-    stampel = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    arende_id = f"{stampel}-{uuid.uuid4().hex[:6]}"
+    # 2. Ge ärendet ett läsbart och unikt id: "arende-" + datum + tid (UTC)
+    #    + en kort slumpdel. Datum och tid först gör att mapparna sorterar
+    #    sig i tidsordning. Slumpdelen ser till att två ärenden i samma
+    #    sekund inte krockar. Exempel: arende-2026-09-10-111200-1c4d1e
+    stampel = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%S")
+    arende_id = f"arende-{stampel}-{uuid.uuid4().hex[:6]}"
 
     # 3. Spara själva ärendet som en JSON-fil, i en egen mapp per ärende.
     arende = {
