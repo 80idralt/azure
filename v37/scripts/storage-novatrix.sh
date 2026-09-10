@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # Lagringslagret för Novatrix v37 som kod: storage account, privat Blob-
-# container, och den hanterade identiteten från v35 kopplad till webbservern
-# med läsbehörighet på blob-data.
+# container, den hanterade identiteten från v35 kopplad till webbservern
+# med skrivbehörighet på containern, och en nätverksregel som låser kontot
+# till webb-subnätet.
 #
 # Körs i Azure Cloud Shell (bash) eller lokalt efter "az login".
 
@@ -13,6 +14,8 @@ RG="${RG:-rg-novatrix-v34}"
 LOC="swedencentral"
 STORAGE="${STORAGE:-stnovatrixv37idr}"   # måste vara globalt unikt
 CONTAINER="arenden"
+VNET="vnet-novatrix-v36"
+SUBNET="snet-web"
 VM="vm-novatrix-web"
 APP_IDENTITY="id-novatrix-app"
 
@@ -36,11 +39,28 @@ APP_ID=$(az identity show -g "$RG" -n "$APP_IDENTITY" --query id -o tsv)
 az vm identity assign --resource-group "$RG" --name "$VM" --identities "$APP_ID"
 
 
-# --- 4. Läsbehörighet på blob-data för identiteten (scope = kontot) ------
-# Dataroller är skilda från roller på kontot; Owner räcker inte. Skrivrätt
-# läggs till när formuläret kopplas in.
+# --- 4. Skrivbehörighet på containern för identiteten ------------------
+# Dataroller är skilda från roller på kontot; Owner räcker inte. Contributor
+# scopat till just containern: appen får skriva ärenden dit, inget annat.
 APP_PRINCIPAL=$(az identity show -g "$RG" -n "$APP_IDENTITY" --query principalId -o tsv)
 STORAGE_ID=$(az storage account show -g "$RG" -n "$STORAGE" --query id -o tsv)
 az role assignment create \
     --assignee-object-id "$APP_PRINCIPAL" --assignee-principal-type ServicePrincipal \
-    --role "Storage Blob Data Reader" --scope "$STORAGE_ID"
+    --role "Storage Blob Data Contributor" \
+    --scope "$STORAGE_ID/blobServices/default/containers/$CONTAINER"
+
+
+# --- 5. Nätverksregel: lås kontot till webb-subnätet ------------------
+# Service endpoint på snet-web, tillåt det subnätet, neka allt annat.
+# Lägg till din egen IP separat om du behöver nå kontot från portalen:
+#   az storage account network-rule add -g "$RG" --account-name "$STORAGE" --ip-address <din IP>
+az network vnet subnet update \
+    --resource-group "$RG" --vnet-name "$VNET" --name "$SUBNET" \
+    --service-endpoints Microsoft.Storage
+
+az storage account network-rule add \
+    --resource-group "$RG" --account-name "$STORAGE" \
+    --vnet-name "$VNET" --subnet "$SUBNET"
+
+az storage account update \
+    --name "$STORAGE" --resource-group "$RG" --default-action Deny
