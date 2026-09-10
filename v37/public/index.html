@@ -55,10 +55,9 @@
         <p>Välkommen till Novatrix. Var vänligen använd formuläret nedan för att skapa ett ärende eller kontakta oss.</p>
         <br>
         
-        <!-- action="#" tills formuläret kopplas till lagringen. enctype och
-             fil-fältet är på plats redan nu, det är det som krävs för att en
-             bilaga ska kunna följa med i inskicket. -->
-        <form action="#" method="POST" enctype="multipart/form-data">
+        <!-- Skickas som multipart/form-data till /submit, som nginx skickar
+             vidare till mottagaren. enctype behövs för att bilagan ska följa med. -->
+        <form action="/submit" method="POST" enctype="multipart/form-data">
             <label for="name">Ditt namn:</label><br>
             <input type="text" id="name" name="name" required>
             <br>
