@@ -6,6 +6,9 @@
 # till webb-subnätet.
 #
 # Körs i Azure Cloud Shell (bash) eller lokalt efter "az login".
+# Sätt ADMIN_IP till din publika IP eller ett litet intervall om du vill nå
+# kontot från portalen efter att nätverksregeln slagits på, t.ex.:
+#   ADMIN_IP=203.0.113.0/24 bash storage-novatrix.sh
 
 # Git Bash gör om /-argument till Windows-sökvägar. Raden stänger av det.
 export MSYS_NO_PATHCONV=1
@@ -18,6 +21,7 @@ VNET="vnet-novatrix-v36"
 SUBNET="snet-web"
 VM="vm-novatrix-web"
 APP_IDENTITY="id-novatrix-app"
+ADMIN_IP="${ADMIN_IP:-}"
 
 
 # --- 1. Storage account: StorageV2, Standard, LRS, Hot, HTTPS, anonym av ---
@@ -29,6 +33,8 @@ az storage account create \
 
 
 # --- 2. Container "arenden" för ärenden och bilagor, privat ---------------
+# --auth-mode login loggar in med Entra ID. Den som kör behöver en
+# blob-dataroll på kontot, annars lägg till --account-key.
 az storage container create \
     --name "$CONTAINER" --account-name "$STORAGE" \
     --auth-mode login --public-access off
@@ -51,9 +57,8 @@ az role assignment create \
 
 
 # --- 5. Nätverksregel: lås kontot till webb-subnätet ------------------
-# Service endpoint på snet-web, tillåt det subnätet, neka allt annat.
-# Lägg till din egen IP separat om du behöver nå kontot från portalen:
-#   az storage account network-rule add -g "$RG" --account-name "$STORAGE" --ip-address <din IP>
+# Service endpoint på snet-web, tillåt det subnätet (och ev. din admin-IP),
+# neka allt annat. Lägg till det tillåtna först, sätt Neka sist.
 az network vnet subnet update \
     --resource-group "$RG" --vnet-name "$VNET" --name "$SUBNET" \
     --service-endpoints Microsoft.Storage
@@ -61,6 +66,12 @@ az network vnet subnet update \
 az storage account network-rule add \
     --resource-group "$RG" --account-name "$STORAGE" \
     --vnet-name "$VNET" --subnet "$SUBNET"
+
+if [ -n "$ADMIN_IP" ]; then
+    az storage account network-rule add \
+        --resource-group "$RG" --account-name "$STORAGE" \
+        --ip-address "$ADMIN_IP"
+fi
 
 az storage account update \
     --name "$STORAGE" --resource-group "$RG" --default-action Deny
