@@ -297,7 +297,17 @@ Lagringen hänger ihop med resten på två punkter. **Identiteten:** `id-novatri
 
 Alla skript använder samma namngivning och samma resursgrupp. Det pekar mot nästa kurssteg, där miljön samlas i en ARM-mall.
 
-### 6.3 Svar på uppgiftens frågor
+### 6.3 Val som går utöver grundlösningen
+
+Den enklaste vägen till en fungerande mottagare gör tre saker enklare än nödvändigt. Jag gjorde annorlunda på varje punkt, och varje avsteg är ett medvetet val.
+
+| Enklaste vägen | Min lösning | Varför |
+|---|---|---|
+| Kontonamnet hårdkodat i `app.py` | `STORAGE_ACCOUNT` som miljövariabel, satt av systemd-tjänsten och läst med `os.environ` | Samma kod kan köras mot vilken miljö som helst utan att ändras. Det är en av VG-utmaningarna. |
+| VM:ens system-tilldelade identitet, hela servern får åtkomst till kontot | User-assigned `id-novatrix-app` från v35, och `AZURE_CLIENT_ID` pekar ut just den i `DefaultAzureCredential`. Rollen är scopad till containern | Identiteten är fristående och överlever att servern byts ut. Behörigheten är dessutom avgränsad till en container, inte hela kontot. Least privilege. |
+| Python-paketen installeras systemvitt | Egen virtuell miljö i `/opt/novatrix/venv` | Appens beroenden (Flask, `azure-storage-blob`) krockar inte med systemets Python. Så kör man Linux-tjänster. |
+
+### 6.4 Svar på uppgiftens frågor
 
 VG-delen ställer några frågor. Här är svaren samlade.
 
