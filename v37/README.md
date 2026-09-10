@@ -211,7 +211,7 @@ Snävast möjliga: bara läsa, bara den filen, kort tid. Går den ut slutar den 
 Behörigheterna styr *vem* som får göra vad. Nätverksregeln styr *varifrån*. Jag la en brandvägg framför kontot, ungefär som NSG:n framför webbservern i v36: standardåtgärden är **Neka**, och bara två källor släpps in.
 
 - **`snet-web`**, subnätet där webbservern står, via en service endpoint för `Microsoft.Storage`. När VM:en pratar med lagringen känner Azure igen att trafiken kommer från det subnätet och släpper in den.
-- **Min egen IP**, för att kunna administrera kontot och bläddra i containern från portalen.
+- **Mitt eget IP-intervall**, för att kunna administrera kontot och bläddra i containern från portalen. Jag använder ett litet intervall från min internetleverantör (`31.208.58.0/23`) i stället för en enskild adress, eftersom min publika IP är dynamisk och byter ibland. Intervallet är fortfarande begränsat, och det som faktiskt skyddar datan är RBAC-lagret och att anonym åtkomst är av.
 
 ```
 az network vnet subnet update -g rg-novatrix-v34 --vnet-name vnet-novatrix-v36 \
@@ -221,7 +221,7 @@ az storage account network-rule add -g rg-novatrix-v34 --account-name stnovatrix
     --vnet-name vnet-novatrix-v36 --subnet snet-web
 
 az storage account network-rule add -g rg-novatrix-v34 --account-name stnovatrixv37idr \
-    --ip-address <min publika IP>
+    --ip-address 31.208.58.0/23
 
 az storage account update -g rg-novatrix-v34 -n stnovatrixv37idr --default-action Deny
 ```
@@ -231,7 +231,7 @@ az storage account network-rule list -g rg-novatrix-v34 --account-name stnovatri
 
 defaultAction   Deny
 virtualNetworkRules   .../virtualNetworks/vnet-novatrix-v36/subnets/snet-web   (Allow, Succeeded)
-ipRules   <min publika IP>
+ipRules   31.208.58.0/23
 ```
 
 **Service endpoint på `snet-web`, inte privat endpoint i `snet-db`.** I v36 förberedde jag `snet-db` med regeln `Allow-Web-To-Storage` för en privat endpoint. Men webbservern står i `snet-web`, och det är därifrån trafiken kommer, så en service endpoint på just det subnätet är den kortare vägen och räcker för uppgiften. En privat endpoint i `snet-db` hade också fungerat men krävt en extra resurs och en privat DNS-zon.
@@ -244,7 +244,7 @@ ipRules   <min publika IP>
 |---|---|---|
 | `arenden` | RBAC via hanterad identitet | `id-novatrix-app` läser och skriver ärenden och bilagor (roll Storage Blob Data Contributor, scope: containern). Inget anonymt. |
 | `arenden`, enskild blob | Kort läs-SAS | Tillfällig delning: bara läsa, bara den filen, HTTPS, tidsbegränsat |
-| Kontot | Nätverksregel, standard Neka | Bara `snet-web` (service endpoint) och min admin-IP. Allt annat nekas på nätverksnivå. |
+| Kontot | Nätverksregel, standard Neka | Bara `snet-web` (service endpoint) och mitt admin-IP-intervall. Allt annat nekas på nätverksnivå. |
 
 ## 5. Verifiera
 
