@@ -20,7 +20,7 @@ Jag bygger vidare på samma miljö som förut, `rg-novatrix-v34` i `swedencentra
 
 - `vm-novatrix-web` från v34, nu i `snet-web` efter v36
 - Behörighetsmodellen och den hanterade identiteten `id-novatrix-app` från v35
-- Nätverket från v36. `snet-db` var tänkt att husera lagringen via en privat endpoint, och `nsg-db-v36` har regeln `Allow-Web-To-Storage` (443 från webbsubnätet). Jag landade i stället i en service endpoint på `snet-web`, se avsnitt 4.4.
+- Nätverket från v36. `snet-db` var förberett för att husera lagringen via en privat endpoint, med regeln `Allow-Web-To-Storage` (443 från webbsubnätet) redan på plats i `nsg-db-v36`. Den förberedelsen används nu, se avsnitt 4.4.
 
 `id-novatrix-app` skapade jag i v35 med kommentaren att den skulle kopplas ihop med lagringen först nu. Det är det som händer den här veckan.
 
@@ -210,37 +210,59 @@ Snävast möjliga: bara läsa, bara den filen, kort tid. Går den ut slutar den 
 
 ### 4.4 Begränsa nätverksåtkomsten
 
-Behörigheterna styr *vem* som får göra vad. Nätverksregeln styr *varifrån*. Jag la en brandvägg framför kontot, ungefär som NSG:n framför webbservern i v36: standardåtgärden är **Neka**, och bara två källor släpps in.
+Behörigheterna styr *vem* som får göra vad. Nätverksregeln styr *varifrån*. Jag la en brandvägg framför kontot, ungefär som NSG:n framför webbservern i v36: standardåtgärden är **Neka**, och bara två vägar in släpps förbi.
 
-- **`snet-web`**, subnätet där webbservern står, via en service endpoint för `Microsoft.Storage`. När VM:en pratar med lagringen känner Azure igen att trafiken kommer från det subnätet och släpper in den.
-- **Mitt eget IP-intervall**, för att kunna administrera kontot och bläddra i containern från portalen. Jag använder ett litet intervall (ett /23) från min internetleverantör i stället för en enskild adress, eftersom min publika IP är dynamisk och byter ibland. Intervallet är fortfarande begränsat, och det som faktiskt skyddar datan är RBAC-lagret och att anonym åtkomst är av.
+- **En privat endpoint i `snet-db`**, samma subnät som förbereddes för det här redan i v36. Endpointen (`pe-novatrix-storage`) får en egen privat IP-adress inne i VNet:et, `10.0.2.4`, och representerar lagringskontot. En privat DNS-zon (`privatelink.blob.core.windows.net`), länkad till hela VNet:et, gör att webbservern i `snet-web` slår upp kontots namn till just den privata adressen, trots att den står i ett annat subnät än endpointen själv. Trafik den här vägen lämnar aldrig Azures nätverk och rör aldrig den publika brandväggsregeln.
+- **Mitt eget IP-intervall**, för att kunna administrera kontot och bläddra i containern från portalen. Jag använder ett litet intervall (ett /22) från min internetleverantör i stället för en enskild adress, eftersom min publika IP är dynamisk och byter ibland.
 
 ```
-az network vnet subnet update -g rg-novatrix-v34 --vnet-name vnet-novatrix-v36 \
-    -n snet-web --service-endpoints Microsoft.Storage
+az network private-endpoint create -g rg-novatrix-v34 -n pe-novatrix-storage \
+    --vnet-name vnet-novatrix-v36 --subnet snet-db \
+    --private-connection-resource-id <lagringskontots resurs-id> \
+    --group-id blob --connection-name pe-novatrix-storage-connection
 
-az storage account network-rule add -g rg-novatrix-v34 --account-name stnovatrixv37idr \
+"privateLinkServiceConnectionState": {
+    "actionsRequired": "None",
+    "description": "Auto-Approved",
+    "status": "Approved"
+}
+```
+
+```
+az network private-dns zone create -g rg-novatrix-v34 -n privatelink.blob.core.windows.net
+
+az network private-dns link vnet create -g rg-novatrix-v34 -n pdns-link-novatrix \
+    -z privatelink.blob.core.windows.net -v vnet-novatrix-v36 -e false
+
+az network private-endpoint dns-zone-group create -g rg-novatrix-v34 \
+    --endpoint-name pe-novatrix-storage -n default \
+    --private-dns-zone privatelink.blob.core.windows.net --zone-name blob
+```
+
+Uppslaget bekräftat från webbservern, som står i ett annat subnät än endpointen:
+
+```
+azureuser-web@vm-novatrix-web:~$ nslookup stnovatrixv37idr.blob.core.windows.net
+stnovatrixv37idr.blob.core.windows.net  canonical name = stnovatrixv37idr.privatelink.blob.core.windows.net.
+Name:   stnovatrixv37idr.privatelink.blob.core.windows.net
+Address: 10.0.2.4
+```
+
+**Först en service endpoint, sedan en privat endpoint.** Jag byggde nätverkslåset i två steg. Först en service endpoint på `snet-web`, den enklare av de två: en rad som slår på `Microsoft.Storage` på subnätet och en brandväggsregel som litar på trafik därifrån. Den fungerade, och jag verifierade att formuläret sparade ärenden med den på plats. Men uppgiften och `v36`-förberedelsen (`snet-db` + `nsg-db-v36`) pekade mot en privat endpoint, så jag byggde den också, enligt stegen ovan. Med den privata endpointen på plats tog jag bort service endpoint-regeln för `snet-web` och testade om, samma resultat, ärendet sparades ändå, vilket bevisar att den privata endpointen ensam räcker.
+
+```
+az storage account network-rule remove -g rg-novatrix-v34 --account-name stnovatrixv37idr \
     --vnet-name vnet-novatrix-v36 --subnet snet-web
 
-az storage account network-rule add -g rg-novatrix-v34 --account-name stnovatrixv37idr \
-    --ip-address <mitt IP-intervall>
-
-az storage account update -g rg-novatrix-v34 -n stnovatrixv37idr --default-action Deny
+"networkRuleSet": {
+    "defaultAction": "Deny",
+    "ipRules": [ { "action": "Allow", "ipAddressOrRange": "31.208.56.0/22" } ],
+    "virtualNetworkRules": []
+},
+"privateEndpointConnections": [ { "privateLinkServiceConnectionState": { "status": "Approved" } } ]
 ```
 
-```
-az storage account network-rule list -g rg-novatrix-v34 --account-name stnovatrixv37idr --query "ipRules" -o table
-
-IpAddressOrRange     Action
--------------------  --------
-<mitt IP-intervall>  Allow
-```
-
-`az storage account show` visar samtidigt `networkRuleSet.defaultAction: Deny` och `snet-web` under `virtualNetworkRules`.
-
-**Service endpoint på `snet-web`, inte privat endpoint i `snet-db`.** I v36 förberedde jag `snet-db` med regeln `Allow-Web-To-Storage` för en privat endpoint. Men webbservern står i `snet-web`, och det är därifrån trafiken kommer, så en service endpoint på just det subnätet är den kortare vägen och räcker för uppgiften. En privat endpoint i `snet-db` hade också fungerat men krävt en extra resurs och en privat DNS-zon.
-
-`publicNetworkAccess` står kvar som `Enabled`. Det betyder att den publika adressen finns, men den styrs nu av nätverksreglerna: bara `snet-web` och mitt IP-intervall kommer förbi.
+`publicNetworkAccess` står kvar som `Enabled`. Det betyder att kontot fortfarande har en publik adress, men den är låst av brandväggen: bara mitt admin-IP-intervall kommer förbi den vägen. Webbservern går i stället via den privata endpointen, helt utanför den publika vägen.
 
 ### Åtkomsten i översikt
 
@@ -248,7 +270,7 @@ IpAddressOrRange     Action
 |---|---|---|
 | `arenden` | RBAC via hanterad identitet | `id-novatrix-app` läser och skriver ärenden och bilagor (roll Storage Blob Data Contributor, scope: containern). Inget anonymt. |
 | `arenden`, enskild blob | Kort läs-SAS | Tillfällig delning: bara läsa, bara den filen, HTTPS, tidsbegränsat |
-| Kontot | Nätverksregel, standard Neka | Bara `snet-web` (service endpoint) och mitt admin-IP-intervall. Allt annat nekas på nätverksnivå. |
+| Kontot | Nätverksregel, standard Neka | Webbservern via en privat endpoint i `snet-db` (trafiken lämnar aldrig Azure), och mitt admin-IP-intervall för portalåtkomst. Allt annat nekas på nätverksnivå. |
 
 ## 5. Verifiera
 
@@ -297,7 +319,7 @@ Mottagaren som kopplar formuläret till lagringen ligger också som kod: [`app/a
 | `hoppvard-novatrix.sh` | Hoppvärden | v36 (VG) |
 | `storage-novatrix.sh` | Lagringen | v37 |
 
-Lagringen hänger ihop med resten på två punkter. **Identiteten:** `id-novatrix-app` skapades i v35 och kopplas till `vm-novatrix-web`, så att appen på servern kan nå blob-data utan lösenord. **Nätverket:** kontot är låst till `snet-web` via en service endpoint (avsnitt 4.4), samma VNet som byggdes i v36. Webbservern, identiteten och lagringen sitter alltså ihop i samma miljö, och trafiken mellan dem lämnar aldrig Azure.
+Lagringen hänger ihop med resten på två punkter. **Identiteten:** `id-novatrix-app` skapades i v35 och kopplas till `vm-novatrix-web`, så att appen på servern kan nå blob-data utan lösenord. **Nätverket:** kontot är låst med en privat endpoint i `snet-db` (avsnitt 4.4), samma VNet som byggdes i v36. Webbservern, identiteten och lagringen sitter alltså ihop i samma miljö, och trafiken mellan dem lämnar aldrig Azure.
 
 Alla skript använder samma namngivning och samma resursgrupp. Det pekar mot nästa kurssteg, där miljön samlas i en ARM-mall.
 
@@ -312,6 +334,7 @@ Den enklaste vägen till en fungerande mottagare gör tre saker enklare än nöd
 | Python-paketen installeras systemvitt | Egen virtuell miljö i `/opt/novatrix/venv` | Appens beroenden (Flask, `azure-storage-blob`) krockar inte med systemets Python. Så kör man Linux-tjänster. |
 | Flasks inbyggda utvecklingsserver | `gunicorn` bakom nginx | Utvecklingsservern varnar själv i sin egen logg att den inte är för produktion. `gunicorn` är en riktig produktionsserver, samma port och samma app, bara stabilare under belastning. |
 | Formuläret nås bara över `http://` | All trafik omdirigerad till `https://` (port 443) med ett självsignerat certifikat | Kryptering mellan besökare och server, samma princip som HTTPS-kravet mot lagringen i avsnitt 4.1. Ingen riktig domän finns att hänga ett betrott certifikat på, så webbläsaren varnar om utfärdaren, men trafiken är krypterad. |
+| Service endpoint, som räcker för kravet | Privat endpoint i `snet-db`, med egen privat IP-adress och privat DNS-zon (avsnitt 4.4) | Nämns uttryckligen som en av VG-utmaningarna. Trafiken mellan webbservern och lagringen lämnar aldrig Azures nätverk, i stället för att bara vara igenkänd av en brandväggsregel. |
 
 En sak jag medvetet valde bort: en publik informationssida i `$web`. `$web` är byggt för att vara öppet för vem som helst, men kontot är låst med en nätverksregel som bara släpper in `snet-web` och min egen IP (avsnitt 4.4). De två dragen motsäger varandra: en sida som ska vara öppen för alla kan inte samtidigt ligga bakom en brandvägg som stänger ute alla utom oss. Att se den konflikten och avstå är ett medvetet val, inte en genväg.
 

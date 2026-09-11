@@ -2,8 +2,8 @@
 #
 # Lagringslagret för Novatrix v37 som kod: storage account, privat Blob-
 # container, den hanterade identiteten från v35 kopplad till webbservern
-# med skrivbehörighet på containern, och en nätverksregel som låser kontot
-# till webb-subnätet.
+# med skrivbehörighet på containern, och en privat endpoint i databas-
+# subnätet som låser kontot till VNet:et.
 #
 # Körs i Azure Cloud Shell (bash) eller lokalt efter "az login".
 # Sätt ADMIN_IP till din publika IP eller ett litet intervall om du vill nå
@@ -18,7 +18,7 @@ LOC="swedencentral"
 STORAGE="${STORAGE:-stnovatrixv37idr}"   # måste vara globalt unikt
 CONTAINER="arenden"
 VNET="vnet-novatrix-v36"
-SUBNET="snet-web"
+DBSUBNET="snet-db"
 VM="vm-novatrix-web"
 APP_IDENTITY="id-novatrix-app"
 ADMIN_IP="${ADMIN_IP:-}"
@@ -56,16 +56,28 @@ az role assignment create \
     --scope "$STORAGE_ID/blobServices/default/containers/$CONTAINER"
 
 
-# --- 5. Nätverksregel: lås kontot till webb-subnätet ------------------
-# Service endpoint på snet-web, tillåt det subnätet (och ev. din admin-IP),
-# neka allt annat. Lägg till det tillåtna först, sätt Neka sist.
-az network vnet subnet update \
-    --resource-group "$RG" --vnet-name "$VNET" --name "$SUBNET" \
-    --service-endpoints Microsoft.Storage
+# --- 5. Privat endpoint i snet-db + brandvägg --------------------------
+# Endpointen får en egen privat IP-adress i snet-db. Den privata DNS-zonen
+# länkas till hela VNet:et, så webbservern i snet-web slår upp kontots
+# namn dit också, trots att den står i ett annat subnät. Trafiken lämnar
+# aldrig Azures nätverk. Lägg till det tillåtna (admin-IP) först, sätt
+# Neka sist.
+az network private-endpoint create \
+    --resource-group "$RG" --name pe-novatrix-storage \
+    --vnet-name "$VNET" --subnet "$DBSUBNET" \
+    --private-connection-resource-id "$STORAGE_ID" \
+    --group-id blob --connection-name pe-novatrix-storage-connection
 
-az storage account network-rule add \
-    --resource-group "$RG" --account-name "$STORAGE" \
-    --vnet-name "$VNET" --subnet "$SUBNET"
+az network private-dns zone create \
+    --resource-group "$RG" --name privatelink.blob.core.windows.net
+
+az network private-dns link vnet create \
+    --resource-group "$RG" --name pdns-link-novatrix \
+    --zone-name privatelink.blob.core.windows.net --virtual-network "$VNET" -e false
+
+az network private-endpoint dns-zone-group create \
+    --resource-group "$RG" --endpoint-name pe-novatrix-storage -n default \
+    --private-dns-zone privatelink.blob.core.windows.net --zone-name blob
 
 if [ -n "$ADMIN_IP" ]; then
     az storage account network-rule add \
