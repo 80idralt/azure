@@ -1,3 +1,4 @@
 flask
+gunicorn
 azure-identity
 azure-storage-blob

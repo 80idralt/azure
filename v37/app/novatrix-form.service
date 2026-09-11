@@ -1,9 +1,10 @@
 # systemd-tjänst för Novatrix ärendemottagare (v37).
 # Läggs som /etc/systemd/system/novatrix-form.service på webbservern.
-# Kör app.py som www-data. Kontonamn och identitet sätts som miljövariabler
-# här, inte i koden. Byt STORAGE_ACCOUNT och AZURE_CLIENT_ID vid återanvändning.
+# Kör app.py via gunicorn (produktionsserver, inte Flasks egen utvecklingsserver)
+# som www-data. Kontonamn och identitet sätts som miljövariabler här, inte i
+# koden. Byt STORAGE_ACCOUNT och AZURE_CLIENT_ID vid återanvändning.
 [Unit]
-Description=Novatrix arendemottagare (Flask)
+Description=Novatrix arendemottagare (gunicorn)
 After=network-online.target
 Wants=network-online.target
 
@@ -13,7 +14,7 @@ WorkingDirectory=/opt/novatrix
 Environment=STORAGE_ACCOUNT=stnovatrixv37idr
 Environment=CONTAINER=arenden
 Environment=AZURE_CLIENT_ID=0a942410-a7fa-4436-a32a-47ed9f215e03
-ExecStart=/opt/novatrix/venv/bin/python /opt/novatrix/app.py
+ExecStart=/opt/novatrix/venv/bin/gunicorn --bind 127.0.0.1:5000 app:app
 Restart=on-failure
 
 [Install]

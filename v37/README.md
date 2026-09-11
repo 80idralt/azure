@@ -306,6 +306,16 @@ Den enklaste vägen till en fungerande mottagare gör tre saker enklare än nöd
 | Kontonamnet hårdkodat i `app.py` | `STORAGE_ACCOUNT` som miljövariabel, satt av systemd-tjänsten och läst med `os.environ` | Samma kod kan köras mot vilken miljö som helst utan att ändras. Det är en av VG-utmaningarna. |
 | VM:ens system-tilldelade identitet, hela servern får åtkomst till kontot | User-assigned `id-novatrix-app` från v35, och `AZURE_CLIENT_ID` pekar ut just den i `DefaultAzureCredential`. Rollen är scopad till containern | Identiteten är fristående och överlever att servern byts ut. Behörigheten är dessutom avgränsad till en container, inte hela kontot. Least privilege. |
 | Python-paketen installeras systemvitt | Egen virtuell miljö i `/opt/novatrix/venv` | Appens beroenden (Flask, `azure-storage-blob`) krockar inte med systemets Python. Så kör man Linux-tjänster. |
+| Flasks inbyggda utvecklingsserver | `gunicorn` bakom nginx | Utvecklingsservern varnar själv i sin egen logg att den inte är för produktion. `gunicorn` är en riktig produktionsserver, samma port och samma app, bara stabilare under belastning. |
+| Formuläret nås bara över `http://` | All trafik omdirigerad till `https://` (port 443) med ett självsignerat certifikat | Kryptering mellan besökare och server, samma princip som HTTPS-kravet mot lagringen i avsnitt 4.1. Ingen riktig domän finns att hänga ett betrott certifikat på, så webbläsaren varnar om utfärdaren, men trafiken är krypterad. |
+
+En sak jag medvetet valde bort: en publik informationssida i `$web`. `$web` är byggt för att vara öppet för vem som helst, men kontot är låst med en nätverksregel som bara släpper in `snet-web` och min egen IP (avsnitt 4.4). De två dragen motsäger varandra: en sida som ska vara öppen för alla kan inte samtidigt ligga bakom en brandvägg som stänger ute alla utom oss. Att se den konflikten och avstå är ett medvetet val, inte en genväg.
+
+<img src="images/https.png" alt="Formuläret öppnat över https, adressfältet visar https://20.240.247.212" width="500">
+<img src="images/tackhttps.png" alt="Tack-sidan över https efter ett inskick" width="500">
+<img src="images/arendehttps.png" alt="Containern arenden med ärendet som skickades in över https" width="750">
+
+Den röda "Inte säker"-texten i webbläsaren är förväntad. Den varnar för att certifikatet är självsignerat, inte att trafiken är okrypterad, den är det inte.
 
 ### 6.4 Svar på uppgiftens frågor
 
