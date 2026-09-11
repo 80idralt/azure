@@ -97,11 +97,11 @@ Formuläret på webbsidan är statiskt. En sida i webbläsaren har ingen identit
 ### Så går ett ärende in
 
 ```
-webbläsare  --POST /submit-->  nginx  --vidare-->  mottagaren (127.0.0.1:5000)  --skriver-->  containern arenden
+besökare  --https://novatrix-idr.swedencentral.cloudapp.azure.com-->  nginx (443)  --vidare-->  mottagaren, gunicorn (127.0.0.1:5000)  --skriver-->  containern arenden
 ```
 
 - Formuläret (`public/index.html`) postar till `/submit` med `enctype="multipart/form-data"` så en bild följer med.
-- nginx serverar sidan som förut och skickar `/submit` vidare till mottagaren. Port 5000 nås aldrig utifrån.
+- nginx serverar sidan över HTTPS och skickar `/submit` vidare till mottagaren, som körs av gunicorn i stället för Flasks utvecklingsserver. Port 5000 nås aldrig utifrån. Certifikatet och det publika DNS-namnet beskrivs i avsnitt 6.3.
 - Mottagaren (`app/app.py`, Flask) tar emot namn, e-post, meddelande och en eventuell bild. Den ger ärendet ett läsbart id, `arende-` plus datum, tid och en kort slumpdel, och skriver två blobar under `<id>/`: `arende.json` med texten, och bilden bredvid.
 - Inloggningen mot lagringen görs med `id-novatrix-app` via `DefaultAzureCredential`. Ingen nyckel, inget lösenord i koden. Kontonamn och identitetens client-id sätts som miljövariabler på servern, inte i filen.
 
