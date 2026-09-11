@@ -264,6 +264,33 @@ az storage account network-rule remove -g rg-novatrix-v34 --account-name stnovat
 
 `publicNetworkAccess` står kvar som `Enabled`. Det betyder att kontot fortfarande har en publik adress, men den är låst av brandväggen: bara mitt admin-IP-intervall kommer förbi den vägen. Webbservern går i stället via den privata endpointen, helt utanför den publika vägen.
 
+### Den privata endpointen i praktiken
+
+<img src="images/natverkskarta.png" alt="Resursöversikt: VM-NOVATRIX-WEB, VM-NOVATRIX-JUMP, id-novatrix-app, pe-novatrix-storage och privatelink.blob.core.windows.net i vnet-novatrix-v36" width="800">
+
+En karta över resursgruppen visar hur allt hänger ihop: webbservern och hoppvärden i sina subnät, den hanterade identiteten `id-novatrix-app` och den privata endpointen `pe-novatrix-storage` med sitt eget nätverkskort, som sitter mellan lagringskontot och `vnet-novatrix-v36`. Den privata DNS-zonen syns också, kopplad till samma VNet.
+
+<img src="images/pe-novatrix-storage.png" alt="pe-novatrix-storage: subnät snet-db, target-resurs blob, Approved/Auto-Approved" width="750">
+
+Endpoint-resursen själv: den ligger i `vnet-novatrix-v36/snet-db`, pekar på lagringskontots blob-tjänst, och anslutningen är `Approved` / `Auto-Approved`, eftersom endpointen och kontot ligger i samma prenumeration.
+
+<img src="images/networkinterface.png" alt="Nätverkskortet bakom endpointen: privat IPv4 10.0.2.4, ingen publik IP" width="750">
+<img src="images/ipsettings.png" alt="IP-konfiguration: privat IP 10.0.2.4 (Dynamic) i snet-db" width="750">
+
+Nätverkskortet bakom endpointen har bara en privat IP-adress, `10.0.2.4`, ur `snet-db`, ingen publik. Det är den adressen webbservern faktiskt pratar med.
+
+Namnet på det kortet (`pe-novatrix-storage.nic.e7537ae1-...`) ser konstigare ut än på de andra resurserna. Det är inget jag valt, Azure genererar det namnet automatiskt när en privat endpoint skapas: endpointens namn plus ett slumpmässigt id på slutet. Anledningen är att kortet inte är tänkt att hanteras för sig, portalen säger uttryckligen att dess egenskaper inte går att ändra eftersom det hör till länken. Alla andra resurser i miljön, VM:ar, publika IP-adresser, själva endpointen, har jag döpt själv. Det här kortet är den enda Azure sköter helt på egen hand.
+
+<img src="images/privatelink.png" alt="Virtual Network Links: pdns-link-novatrix kopplad till vnet-novatrix-v36, Auto-Registration och Fallback to Internet avstängda" width="750">
+<img src="images/privatednszone.png" alt="Den privata DNS-zonen privatelink.blob.core.windows.net, översikt" width="750">
+<img src="images/recordsets.png" alt="DNS-posten: stnovatrixv37idr (A) pekar på 10.0.2.4" width="750">
+
+Den privata DNS-zonen `privatelink.blob.core.windows.net` är länkad till `vnet-novatrix-v36`. Auto-Registration och Fallback to Internet är avstängda, så zonen bara svarar på uppslag som kommer inifrån det VNet:et, den läcker inget utåt. Raden som gör själva jobbet är DNS-posten längst ner: en A-post för `stnovatrixv37idr` som pekar på `10.0.2.4`. Det är den posten `nslookup` läste av tidigare i det här avsnittet.
+
+En privat endpoint är i grunden ett nätverkskort till. Det läggs i ett subnät precis som en VM skulle, får en egen privat IP-adress ur det subnätets intervall, och representerar sedan en specifik Azure-tjänst, i det här fallet blob-delen av lagringskontot. Allt som pratar med den adressen pratar i praktiken med lagringskontot, men utan att lämna VNet:et.
+
+Det som gör att det fungerar utan att jag behöver ändra något i koden är DNS-delen. Normalt slår en klient upp `stnovatrixv37idr.blob.core.windows.net` och får kontots publika adress tillbaka. Med den privata DNS-zonen länkad till samma VNet blir svaret i stället `stnovatrixv37idr.privatelink.blob.core.windows.net`, som pekar på endpointens privata IP. Webbservern frågar efter exakt samma namn som den alltid gjort, den bara får ett annat svar beroende på varifrån den frågar.
+
 ### Åtkomsten i översikt
 
 | Container / konto | Åtkomstmetod | Vem når vad |
