@@ -172,12 +172,14 @@ Rollen är en dataroll, skild från rollerna på själva kontot. `Owner` och `Co
 Kontroll med `az`:
 
 ```
-az role assignment list --assignee <id-novatrix-app> --all -o table
+az role assignment list --assignee 0a942410-a7fa-4436-a32a-47ed9f215e03 --all --query "[].{roll:roleDefinitionName, scope:scope}" -o table
 
-Principal (appId)                     Role                           Scope
-------------------------------------  -----------------------------  ------------------------------------------------------
-0a942410-a7fa-4436-a32a-47ed9f215e03  Storage Blob Data Contributor  .../storageAccounts/stnovatrixv37idr/.../containers/arenden
+Roll                           Scope
+-----------------------------  ------------------------------------------------------------------------------------------
+Storage Blob Data Contributor  .../storageAccounts/stnovatrixv37idr/blobServices/default/containers/arenden
 ```
+
+(`0a942410-...` är `id-novatrix-app` sitt client-id. Scope är förkortat för läsbarhet, hela strängen är den fullständiga resurs-id:n till containern.)
 
 #### Nyckelåtkomst kontra identitet
 
@@ -227,12 +229,14 @@ az storage account update -g rg-novatrix-v34 -n stnovatrixv37idr --default-actio
 ```
 
 ```
-az storage account network-rule list -g rg-novatrix-v34 --account-name stnovatrixv37idr
+az storage account network-rule list -g rg-novatrix-v34 --account-name stnovatrixv37idr --query "ipRules" -o table
 
-defaultAction   Deny
-virtualNetworkRules   .../virtualNetworks/vnet-novatrix-v36/subnets/snet-web   (Allow, Succeeded)
-ipRules   <mitt IP-intervall>
+IpAddressOrRange     Action
+-------------------  --------
+<mitt IP-intervall>  Allow
 ```
+
+`az storage account show` visar samtidigt `networkRuleSet.defaultAction: Deny` och `snet-web` under `virtualNetworkRules`.
 
 **Service endpoint på `snet-web`, inte privat endpoint i `snet-db`.** I v36 förberedde jag `snet-db` med regeln `Allow-Web-To-Storage` för en privat endpoint. Men webbservern står i `snet-web`, och det är därifrån trafiken kommer, så en service endpoint på just det subnätet är den kortare vägen och räcker för uppgiften. En privat endpoint i `snet-db` hade också fungerat men krävt en extra resurs och en privat DNS-zon.
 
