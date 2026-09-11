@@ -317,6 +317,10 @@ En sak jag medvetet valde bort: en publik informationssida i `$web`. `$web` är 
 
 Den röda "Inte säker"-texten i webbläsaren är förväntad. Den varnar för att certifikatet är självsignerat, inte att trafiken är okrypterad, den är det inte.
 
+Webbserverns publika IP är statisk (Standard SKU), så jag satte ett riktigt DNS-namn på den: `novatrix-idr.swedencentral.cloudapp.azure.com`. Certifikatet har namnet med som ett Subject Alternative Name, tillsammans med `novatrix.local` och den råa IP:n, så alla tre vägarna in fungerar. Ett DNS-namn i stället för ett IP-nummer är vad vem som helst skulle skriva in, inte bara jag.
+
+<img src="images/publikdns.png" alt="Formuläret öppnat via https://novatrix-idr.swedencentral.cloudapp.azure.com" width="500">
+
 ### 6.4 Svar på uppgiftens frågor
 
 VG-delen ställer några frågor. Här är svaren samlade.
