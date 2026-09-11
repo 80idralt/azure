@@ -338,9 +338,6 @@ Cool eller Cold för sällanläst: billigare lagring, dyrare läsning, en minsta
 **Vilket åtkomstsätt är mest spårbart och lättast att återkalla, och varför?**
 RBAC via en identitet. Varje anrop görs av en namngiven identitet och syns i loggarna, och behörigheten tas bort med ett kommando utan att något annat påverkas. En kontonyckel är inte kopplad till någon och måste roteras, vilket slår mot allt som använder den. En SAS går inte att dra tillbaka i förväg, den lever tills den går ut.
 
-**Varför är least privilege ett VG-krav?**
-För att det begränsar skadan när något går fel. Får en identitet bara den behörighet uppgiften kräver, och den kapas, blir det en liten incident i stället för en stor. Angriparen kommer inte åt mer än den lilla yta identiteten hade.
-
 **Varför är den här metoden robustare än en delad nyckel?**
 Appen når lagringen via den hanterade identiteten och RBAC:
 
