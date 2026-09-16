@@ -21,11 +21,17 @@
       "defaultValue": "Standard_LRS",
       "allowedValues": ["Standard_LRS", "Standard_GRS"],
       "metadata": { "description": "Redundansniva for storage-kontot" }
+    },
+        "adminIp": {
+      "type": "string",
+      "metadata": { "description": "Publik IP som far SSH-tillgang till hoppvarden." }
     }
   },
   "variables": {
     "nsgWebName": "[format('nsg-{0}-web', parameters('namePrefix'))]",
-    "vnetName": "[format('vnet-{0}', parameters('namePrefix'))]"
+    "vnetName": "[format('vnet-{0}', parameters('namePrefix'))]",
+    "nsgDbName": "[format('nsg-{0}-db', parameters('namePrefix'))]",
+    "nsgAdminName": "[format('nsg-{0}-admin', parameters('namePrefix'))]"
   },
   "resources": [
         {
@@ -59,13 +65,15 @@
         ]
       }
       },
-    {
+        {
       "type": "Microsoft.Network/virtualNetworks",
       "apiVersion": "2023-09-01",
       "name": "[variables('vnetName')]",
       "location": "[parameters('location')]",
       "dependsOn": [
-        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgWebName'))]"
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgWebName'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgDbName'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgAdminName'))]"
       ],
       "properties": {
         "addressSpace": {
@@ -79,6 +87,70 @@
               "networkSecurityGroup": {
                 "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgWebName'))]"
               }
+            }
+          },
+          {
+            "name": "snet-db",
+            "properties": {
+              "addressPrefix": "10.0.2.0/24",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgDbName'))]"
+              }
+            }
+          },
+          {
+            "name": "snet-admin",
+            "properties": {
+              "addressPrefix": "10.0.3.0/24",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgAdminName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nsgDbName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow-Web-To-Storage",
+            "properties": {
+              "priority": 100,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourceAddressPrefix": "10.0.1.0/24",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "443"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nsgAdminName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow-SSH-Admin",
+            "properties": {
+              "priority": 100,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourceAddressPrefix": "[parameters('adminIp')]",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "22"
             }
           }
         ]

@@ -5,6 +5,7 @@
     "namePrefix": { "value": "novatrix" },
     "location": { "value": "swedencentral" },
     "storageName": { "value": "stnovatrixv38idr" },
-    "sku": { "value": "Standard_LRS" }
+    "sku": { "value": "Standard_LRS" },
+    "adminIp": { "value": "31.208.56.106" }
   }
 }
