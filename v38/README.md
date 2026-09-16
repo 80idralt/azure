@@ -1,15 +1,38 @@
 # Uppgift V38 - IaC med ARM-templates
 
-#### Idris Altun
-#### Azure
+**Repo:** https://github.com/80idralt/azure/tree/master/v38
+
+**Namn:** Idris Altun
+
+**Klass:** MOV25
+
+**Datum:** 2026-09-16
+
 ## Syfte
-Veckans uppgift går ut på att arbeta med Infrastructure as Code (IaC) med ARM-templates i Azure.
 
-## Vad jag gjorde
+Veckans uppgift går ut på att arbeta med Infrastructure as Code (IaC) med ARM-templates i Azure, så att miljön kan återskapas från repot i stället för att klickas fram i portalen.
 
+## Utgångsläge
+
+Mallen ligger i `v38/templates/azuredeploy.json`, parametervärdena i `v38/templates/azuredeploy.parameters.json`. Deployas mot `rg-novatrix`.
+
+## 1. Storage account
+
+Storage-konto tillagt i mallen (`StorageV2`), namn, region och sku (`Standard_LRS`/`Standard_GRS`) som parametrar.
+
+## 2. NSG och VNet
+
+NSG med regel för HTTP/HTTPS (80, 443), samt VNet med ett subnät kopplat till NSG:n. Resursnamnen byggs från ett gemensamt prefix via variabler.
 
 ## Kommandon
 
+```
+az deployment group validate --resource-group rg-novatrix --template-file azuredeploy.json --parameters @azuredeploy.parameters.json
+az deployment group what-if --resource-group rg-novatrix --template-file azuredeploy.json --parameters @azuredeploy.parameters.json
+az deployment group create --resource-group rg-novatrix --template-file azuredeploy.json --parameters @azuredeploy.parameters.json
+```
 
 ## Resultat
+
+Validering: `provisioningState: Succeeded`. `what-if` visade tre resurser att skapa, inget oväntat. Deploy: `provisioningState: Succeeded`, alla tre resurser skapade i `rg-novatrix` (`nsg-novatrix-web`, `vnet-novatrix`, `stnovatrixv38idr`), beroendet mellan VNet och NSG bekräftat i svaret.
 

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "novatrix",
+      "metadata": { "description": "Prefix for alla resursnamn, sa att allt hanger ihop." }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "swedencentral",
+      "metadata": { "description": "Region for resurserna." }
+    },
+    "storageName": {
+      "type": "string",
+      "metadata": { "description": "Namn for storage account." }
+    },
+    "sku": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": ["Standard_LRS", "Standard_GRS"],
+      "metadata": { "description": "Redundansniva for storage-kontot" }
+    }
+  },
+  "variables": {
+    "nsgWebName": "[format('nsg-{0}-web', parameters('namePrefix'))]",
+    "vnetName": "[format('vnet-{0}', parameters('namePrefix'))]"
+  },
+  "resources": [
+        {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[parameters('storageName')]",
+      "location": "[parameters('location')]",
+      "sku": { "name": "[parameters('sku')]" },
+      "kind": "StorageV2"
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nsgWebName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow-Http-Https",
+            "properties": {
+              "priority": 100,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourceAddressPrefix": "*",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRanges": ["80", "443"]
+            }
+          }
+        ]
+      }
+      },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('vnetName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgWebName'))]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": ["10.0.0.0/16"]
+        },
+        "subnets": [
+          {
+            "name": "snet-web",
+            "properties": {
+              "addressPrefix": "10.0.1.0/24",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgWebName'))]"
+              }
+            }
+          }
+        ]
+      }
+    }
+
+  ],
+  "outputs": {
+  }
+}
