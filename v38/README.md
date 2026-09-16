@@ -44,3 +44,5 @@ Validering: `provisioningState: Succeeded`. `what-if` visade tre resurser att sk
 
 Ingen manuell klick i portalen behövs, allt styrs av `azuredeploy.json` och `azuredeploy.parameters.json`.
 
+Testat i praktiken: rev hela `rg-novatrix`, klonade repot till en ren mapp, och körde stegen ovan. Alla tre resurser kom tillbaka med samma namn och samma beroende, `provisioningState: Succeeded`.
+
