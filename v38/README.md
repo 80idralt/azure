@@ -36,3 +36,11 @@ az deployment group create --resource-group rg-novatrix --template-file azuredep
 
 Validering: `provisioningState: Succeeded`. `what-if` visade tre resurser att skapa, inget oväntat. Deploy: `provisioningState: Succeeded`, alla tre resurser skapade i `rg-novatrix` (`nsg-novatrix-web`, `vnet-novatrix`, `stnovatrixv38idr`), beroendet mellan VNet och NSG bekräftat i svaret.
 
+## Så återskapas miljön
+
+1. Klona repot och gå till `v38/templates`.
+2. `az group create --name rg-novatrix --location swedencentral` (om gruppen inte redan finns).
+3. Kör kommandona under Kommandon i ordning: validate, what-if, create.
+
+Ingen manuell klick i portalen behövs, allt styrs av `azuredeploy.json` och `azuredeploy.parameters.json`.
+
