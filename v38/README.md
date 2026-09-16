@@ -36,6 +36,14 @@ az deployment group create --resource-group rg-novatrix --template-file azuredep
 
 Validering: `provisioningState: Succeeded`. `what-if` visade tre resurser att skapa, inget oväntat. Deploy: `provisioningState: Succeeded`, alla tre resurser skapade i `rg-novatrix` (`nsg-novatrix-web`, `vnet-novatrix`, `stnovatrixv38idr`), beroendet mellan VNet och NSG bekräftat i svaret.
 
+<img src="images/rg-novatrix-resurser.png" alt="rg-novatrix: nsg-novatrix-web, stnovatrixv38idr och vnet-novatrix, 1 Succeeded deployment" width="750">
+
+## Versionshantering
+
+Mallen och README:t är committade och pushade till GitHub.
+
+<img src="images/readme-commit-diff.png" alt="Diff av README.md-commiten på GitHub" width="750">
+
 ## Så återskapas miljön
 
 1. Klona repot och gå till `v38/templates`.
@@ -45,4 +53,8 @@ Validering: `provisioningState: Succeeded`. `what-if` visade tre resurser att sk
 Ingen manuell klick i portalen behövs, allt styrs av `azuredeploy.json` och `azuredeploy.parameters.json`.
 
 Testat i praktiken: rev hela `rg-novatrix`, klonade repot till en ren mapp, och körde stegen ovan. Alla tre resurser kom tillbaka med samma namn och samma beroende, `provisioningState: Succeeded`.
+
+<img src="images/rg-riven.png" alt="Resursgrupper efter rivning: bara NetworkWatcherRG kvar" width="750">
+<img src="images/rg-atskapad-tom.png" alt="rg-novatrix återskapad men tom, efter az group create" width="750">
+<img src="images/rg-novatrix-aterskapad.png" alt="rg-novatrix med alla tre resurser tillbaka, byggt från den rena klonen" width="750">
 
