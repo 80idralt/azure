@@ -24,6 +24,8 @@ Valde en fil i stället för flera länkade mallar: miljön är fortfarande lite
 
 Storage-konto (`StorageV2`), namn, region och sku (`Standard_LRS`/`Standard_GRS`) som parametrar, eftersom de skiljer sig mellan miljöer och namnet dessutom måste vara globalt unikt.
 
+Det riktiga kontonamnet byggs i mallen som `storageName` plus sex tecken från `uniqueString(resourceGroup().id)`, så namnet blir garanterat unikt även om samma `storageName` används i en annan prenumeration, utan att man behöver hitta på ett nytt namn för hand varje gång.
+
 ## 2. Nätverk
 
 VNet med tre subnät (`snet-web`, `snet-db`, `snet-admin`), varsin NSG. Webbregeln (80, 443) är öppen för alla, databasregeln bara från webb-subnätet, admin-regeln bara från en given IP-parameter. Resursnamnen byggs från ett gemensamt prefix (`namePrefix`) via variabler, så allt hänger ihop och kan bytas på ett ställe.
@@ -62,9 +64,9 @@ Kontot har `networkAcls` med `defaultAction: Deny` och en `ipRules`-post för `a
 
 ## Parametrar att fylla i
 
-- `storageName` - måste vara globalt unikt
-- `adminIp` - den egna publika IP-adressen, ändras ofta eftersom hemmauppkopplingar sällan har fast IP
-- `sshPublicKey` - publik SSH-nyckel för inloggning på VM:arna
+- `storageName` - basnamnet för storage-kontot, görs automatiskt globalt unikt i mallen (se avsnitt 1), behöver inte bytas
+- `adminIp` - den egna publika IP-adressen. Parameterfilen har platshållarvärdet `BYT_UT_MOT_DIN_EGEN_IP`, deployen stoppas med ett tydligt fel om det inte byts ut. Ändra i den lokala kopian av `azuredeploy.parameters.json`, committa aldrig den riktiga IP:n
+- `sshPublicKey` - publik SSH-nyckel för inloggning på VM:arna. Samma sak, platshållaren `BYT_UT_MOT_DIN_EGEN_SSH_NYCKEL` måste bytas ut i den lokala kopian
 - `namePrefix`, `location`, `sku`, `adminUsername`, `vmSize` - har rimliga standardvärden, behöver oftast inte ändras
 
 ## Kommandon
