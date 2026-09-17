@@ -40,6 +40,12 @@ VM-storleken (`vmSize`) blev `Standard_D2als_v6`, inte den ursprungliga `Standar
 
 En VM (`vm-novatrix-web`) i `snet-web`, med publikt IP och nätverkskort, nås via HTTP/HTTPS enligt `nsg-novatrix-web`.
 
+## 6. Identitet och behörighet
+
+En hanterad identitet (`id-novatrix-app`) kopplad till webbservern, med rollen `Storage Blob Data Contributor` scopad till just `arenden`-containern, inte hela kontot. Det är så webbservern ska kunna skriva ärenden till lagringen utan lösenord i koden.
+
+De mänskliga RBAC-grupperna från v35 (Azure-Drift, Azure-Utveckling m.fl.) är medvetet utelämnade, v38 kräver VM, nätverk, säkerhet och storage, inte IAM.
+
 ## Parametrar att fylla i
 
 - `storageName` - måste vara globalt unikt
@@ -57,7 +63,9 @@ az deployment group create --resource-group rg-novatrix --template-file azuredep
 
 ## Resultat
 
-Validering och `what-if`: `provisioningState: Succeeded`, inget oväntat. Deploy: `provisioningState: Succeeded`, alla tolv resurser skapade i `rg-novatrix` (storage-kontot, containern, tre NSG:er, VNet:et, båda publika IP:na, båda nätverkskorten, hoppvärden och webbservern), beroendena bekräftade i svaret. Mallens `outputs` gav tillbaka rätt resurs-id:n.
+Validering och `what-if`: `provisioningState: Succeeded`, inget oväntat. Deploy: `provisioningState: Succeeded`, alla 14 resurser skapade i `rg-novatrix`, beroendena bekräftade i svaret. Mallens `outputs` gav tillbaka rätt resurs-id:n.
+
+Verifierade rolltilldelningen separat: `az role assignment list --scope <container-id>` visar `Storage Blob Data Contributor` på identitetens principal, scopad exakt till `arenden`.
 
 Loggade in på hoppvärden med SSH för att bevisa att den faktiskt fungerar: `ssh -i novatrix_key azureuser-web@<publikt IP>`, kom in på Ubuntu 24.04.4, privat IP `10.0.3.4` i `snet-admin`, precis som avsett.
 
