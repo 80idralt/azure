@@ -34,7 +34,7 @@ En privat blob-container (`arenden`) för inskickade ärenden, `publicAccess: No
 
 En VM (`vm-novatrix-jump`) i `snet-admin`, med publikt IP och nätverkskort, samma mönster som webbservern. SSH tillåts bara från `adminIp` via `nsg-novatrix-admin`.
 
-VM-storleken (`vmSize`) blev `Standard_D2als_v6`, inte den ursprungliga `Standard_B2ats_v2`: kontot gick över till Pay-As-You-Go och fick tillfälligt 0 i kvot för hela B-seriens familjer i Sweden Central, bekräftat både via mallen och ett fristående test. D-seriens nyaste generation hade kvot och är dessutom billigast i den serien.
+VM-storleken (`vmSize`) är `Standard_B2ats_v2`, samma som i den riktiga miljön.
 
 ## 5. Webbserver
 
@@ -68,6 +68,8 @@ Validering och `what-if`: `provisioningState: Succeeded`, inget oväntat. Deploy
 Verifierade rolltilldelningen separat: `az role assignment list --scope <container-id>` visar `Storage Blob Data Contributor` på identitetens principal, scopad exakt till `arenden`.
 
 Loggade in på hoppvärden med SSH för att bevisa att den faktiskt fungerar: `ssh -i novatrix_key azureuser-web@<publikt IP>`, kom in på Ubuntu 24.04.4, privat IP `10.0.3.4` i `snet-admin`, precis som avsett.
+
+Verifierade även med `az resource list`: samtliga 14 resurser finns i `rg-novatrix`, alla med `Succeeded`.
 
 ## Versionshantering
 
