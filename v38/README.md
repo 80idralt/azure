@@ -98,11 +98,40 @@ Testade ärendemottagaren skarpt: skickade in ett testärende via formuläret p�
 
 Verifierade nätverksskyddet i tre steg: `curl` mot blob-URL:en utifrån gav `AuthorizationFailure` innan `adminIp` lades till, och `PublicAccessNotPermitted` för anonym åtkomst även efter (containerns `publicAccess: None` håller oberoende av nätverksreglerna). `az storage account show` bekräftade `defaultAction: Deny` med `adminIp` som enda `ipRules`-post. Skickade ännu ett testärende (`arende-2026-09-17-155101-9281b8`) efter låsningen, det sparades utan problem via den privata endpointen, så webbserverns väg till lagringen påverkas inte av att allt annat är stängt.
 
+Reproducerbarheten är dessutom testad på en helt fristående maskin, i en annan Azure-prenumeration, utan något lokalt tillstånd kvar från utvecklingsdatorn: `validate`, `what-if` och `create` gick igenom rent, och samma testärende-flöde fungerade där också.
+
 ## Versionshantering
 
 Mallen och README:t är committade och pushade till GitHub, en commit per färdig och testad ändring.
 
 Det gör att drift kan se exakt vad som ändrades och varför (t.ex. bytet av `vmSize` när kvoten löstes, eller tillägget av den privata endpointen), rulla tillbaka till en tidigare fungerande version om en deploy går fel, och flera personer kan jobba i samma repo utan att skriva över varandras ändringar.
+
+```
+546e894 v38: beskriv hur versionshanteringen hjalper drift och samarbete
+fd57ec4 v38: lagg till kommandon for att hitta egen IP och SSH-nyckel i README
+1aed20b v38: forenkla forklaringen av placeholder-varden i README
+c564e54 v38: forklara platshallare och auto-unikt kontonamn i README
+ad1a360 v38: platshallarvarden for adminIp och sshPublicKey i parameterfilen
+260aad3 v38: korta ner unikhets-suffixet sa kontonamnet haller sig under 24 tecken
+6a50730 v38: gor kontonamnet globalt unikt automatiskt med uniqueString
+0b15aa3 v38: privat endpoint och DNS-zon for lagringen, natverkslas med adminIp-undantag
+c6285c3 v38: dokumentera arendemottagaren, verifierat testarende, fixa kommandon
+50bc772 v38: cloud-init pa webbservern installerar arendemottagaren, plus IP-outputs
+064d3f8 v38: lägg till ärendemottagaren (Flask/nginx) som cloud-init klonar in på webbservern
+03f52ec v38: byt VM-storlek tillbaka till Standard_B2ats_v2 nu när kvoten är godkänd
+2a50092 v38: lägg till hanterad identitet och rolltilldelning på storage-containern
+45a37c0 v38: lägg till webbservern (VM, publikt IP, nätverkskort i snet-web)
+5adc52d v38: lägg till hoppvärd, storage-container, verifiera med SSH
+0954928 v38: lägg till privat blob-container (arenden) i storage-kontot
+a24acc3 v38: lägg till outputs (storageAccountId, vnetId), uppdatera README
+618476f v38: städa README, motivera struktur och parametrisering, rätta föråldrade bildtexter
+6d15190 v38: utöka nätverket med snet-db och snet-admin, NSG:er för respektive subnät
+4dcbc24 v38: lägg till skärmdumpar och länka dem i README
+2887bcf modiefied readme.md
+d8369da updated readme
+c93ac61 v38: ARM-mall för storage, NSG och VNet, parametriserad och deployad mot rg-novatrix
+85c046c Korrigerar commits
+```
 
 <img src="images/readme-commit-diff.png" alt="Diff av README.md-commiten på GitHub" width="750">
 
