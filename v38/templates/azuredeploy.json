@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.10.0",
+  "contentVersion": "1.0.11.0",
   "parameters": {
     "namePrefix": {
       "type": "string",
@@ -53,13 +53,14 @@
     "jumpPipName": "[format('pip-{0}', variables('jumpVmName'))]",
     "jumpNicName": "[format('nic-{0}', variables('jumpVmName'))]",
     "appIdentityName": "[format('id-{0}-app', parameters('namePrefix'))]",
-    "storagePeName": "[format('pe-{0}-storage', parameters('namePrefix'))]"
+    "storagePeName": "[format('pe-{0}-storage', parameters('namePrefix'))]",
+    "storageAccountName": "[format('{0}{1}', parameters('storageName'), uniqueString(resourceGroup().id))]"
   },
   "resources": [
         {
       "type": "Microsoft.Storage/storageAccounts",
       "apiVersion": "2023-01-01",
-      "name": "[parameters('storageName')]",
+      "name": "[variables('storageAccountName')]",
       "location": "[parameters('location')]",
       "sku": { "name": "[parameters('sku')]" },
       "kind": "StorageV2",
@@ -79,9 +80,9 @@
      {
       "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
       "apiVersion": "2023-01-01",
-      "name": "[format('{0}/default/arenden', parameters('storageName'))]",
+      "name": "[format('{0}/default/arenden', variables('storageAccountName'))]",
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ],
       "properties": {
         "publicAccess": "None"
@@ -356,7 +357,7 @@
               ]
             }
           },
-          "customData": "[base64(format('#cloud-config\npackage_upgrade: true\npackages:\n- python3-venv\n- python3-pip\n- nginx\n- git\n- openssl\nwrite_files:\n- path: /etc/systemd/system/novatrix-form.service\n  content: |\n    [Unit]\n    Description=Novatrix arendemottagare (gunicorn)\n    After=network-online.target\n    Wants=network-online.target\n\n    [Service]\n    User=www-data\n    WorkingDirectory=/opt/novatrix\n    Environment=STORAGE_ACCOUNT={0}\n    Environment=CONTAINER=arenden\n    Environment=AZURE_CLIENT_ID={1}\n    ExecStart=/opt/novatrix/venv/bin/gunicorn --bind 127.0.0.1:5000 app:app\n    Restart=on-failure\n\n    [Install]\n    WantedBy=multi-user.target\nruncmd:\n- git clone https://github.com/80idralt/azure.git /tmp/azure-repo\n- mkdir -p /opt/novatrix\n- cp /tmp/azure-repo/v38/app/app.py /opt/novatrix/app.py\n- cp /tmp/azure-repo/v38/app/requirements.txt /opt/novatrix/requirements.txt\n- cp /tmp/azure-repo/v38/public/index.html /var/www/html/index.html\n- cp /tmp/azure-repo/v38/app/nginx-arende.conf /etc/nginx/sites-available/default\n- python3 -m venv /opt/novatrix/venv\n- /opt/novatrix/venv/bin/pip install -r /opt/novatrix/requirements.txt\n- mkdir -p /etc/ssl/novatrix\n- openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/novatrix/novatrix.key -out /etc/ssl/novatrix/novatrix.crt -subj /CN=novatrix\n- chown -R www-data:www-data /opt/novatrix\n- systemctl daemon-reload\n- systemctl enable --now novatrix-form.service\n- systemctl restart nginx\n', parameters('storageName'), reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('appIdentityName')), '2023-01-31').clientId))]"
+          "customData": "[base64(format('#cloud-config\npackage_upgrade: true\npackages:\n- python3-venv\n- python3-pip\n- nginx\n- git\n- openssl\nwrite_files:\n- path: /etc/systemd/system/novatrix-form.service\n  content: |\n    [Unit]\n    Description=Novatrix arendemottagare (gunicorn)\n    After=network-online.target\n    Wants=network-online.target\n\n    [Service]\n    User=www-data\n    WorkingDirectory=/opt/novatrix\n    Environment=STORAGE_ACCOUNT={0}\n    Environment=CONTAINER=arenden\n    Environment=AZURE_CLIENT_ID={1}\n    ExecStart=/opt/novatrix/venv/bin/gunicorn --bind 127.0.0.1:5000 app:app\n    Restart=on-failure\n\n    [Install]\n    WantedBy=multi-user.target\nruncmd:\n- git clone https://github.com/80idralt/azure.git /tmp/azure-repo\n- mkdir -p /opt/novatrix\n- cp /tmp/azure-repo/v38/app/app.py /opt/novatrix/app.py\n- cp /tmp/azure-repo/v38/app/requirements.txt /opt/novatrix/requirements.txt\n- cp /tmp/azure-repo/v38/public/index.html /var/www/html/index.html\n- cp /tmp/azure-repo/v38/app/nginx-arende.conf /etc/nginx/sites-available/default\n- python3 -m venv /opt/novatrix/venv\n- /opt/novatrix/venv/bin/pip install -r /opt/novatrix/requirements.txt\n- mkdir -p /etc/ssl/novatrix\n- openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/novatrix/novatrix.key -out /etc/ssl/novatrix/novatrix.crt -subj /CN=novatrix\n- chown -R www-data:www-data /opt/novatrix\n- systemctl daemon-reload\n- systemctl enable --now novatrix-form.service\n- systemctl restart nginx\n', variables('storageAccountName'), reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('appIdentityName')), '2023-01-31').clientId))]"
         },
         "storageProfile": {
           "imageReference": {
@@ -391,10 +392,10 @@
        {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', parameters('storageName'), 'default', 'arenden'), variables('appIdentityName'))]",
-      "scope": "[format('Microsoft.Storage/storageAccounts/{0}/blobServices/default/containers/arenden', parameters('storageName'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'arenden'), variables('appIdentityName'))]",
+      "scope": "[format('Microsoft.Storage/storageAccounts/{0}/blobServices/default/containers/arenden', variables('storageAccountName'))]",
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', parameters('storageName'), 'default', 'arenden')]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'arenden')]",
         "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('appIdentityName'))]"
       ],
       "properties": {
@@ -431,7 +432,7 @@
       "name": "[variables('storagePeName')]",
       "location": "[parameters('location')]",
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
         "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
       ],
       "properties": {
@@ -442,7 +443,7 @@
           {
             "name": "[variables('storagePeName')]",
             "properties": {
-              "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]",
+              "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
               "groupIds": ["blob"]
             }
           }
@@ -472,7 +473,7 @@
   "outputs": {
     "storageAccountId": {
       "type": "string",
-      "value": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+      "value": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
     },
     "vnetId": {
       "type": "string",
