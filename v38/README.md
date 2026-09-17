@@ -65,8 +65,15 @@ Kontot har `networkAcls` med `defaultAction: Deny` och en `ipRules`-post för `a
 ## Parametrar att fylla i
 
 - `storageName` - basnamnet för storage-kontot, görs automatiskt globalt unikt i mallen (se avsnitt 1), behöver inte bytas
-- `adminIp` - den egna publika IP-adressen. Placeholdern `BYT_UT_MOT_DIN_EGEN_IP` gör att deployen stoppas med ett tydligt fel om den inte byts ut
-- `sshPublicKey` - publik SSH-nyckel för inloggning på VM:arna. Samma sak för placeholdern `BYT_UT_MOT_DIN_EGEN_SSH_NYCKEL`
+- `adminIp` - den egna publika IP-adressen. Placeholdern `BYT_UT_MOT_DIN_EGEN_IP` gör att deployen stoppas med ett tydligt fel om den inte byts ut. Ta fram den med:
+  ```
+  (Invoke-RestMethod -Uri "https://api.ipify.org")
+  ```
+- `sshPublicKey` - publik SSH-nyckel för inloggning på VM:arna. Samma sak för placeholdern `BYT_UT_MOT_DIN_EGEN_SSH_NYCKEL`. Visa en befintlig nyckel med:
+  ```
+  Get-Content $HOME\.ssh\id_ed25519.pub
+  ```
+  Ger kommandot ett felmeddelande (ingen nyckel finns), skapa en först med `ssh-keygen -t ed25519` (tryck Enter på alla frågor), kör sedan raden ovan igen.
 - `namePrefix`, `location`, `sku`, `adminUsername`, `vmSize` - har rimliga standardvärden, behöver oftast inte ändras
 
 ## Kommandon
