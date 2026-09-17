@@ -18,6 +18,8 @@ En enda mall, `v38/templates/azuredeploy.json`, med värdena i en separat parame
 
 Valde en fil i stället för flera länkade mallar: miljön är fortfarande liten och sammanhållen för ett företag, en fil ger ett enda deploy-kommando utan beroenden mellan flera filer att hålla reda på.
 
+Ärendemottagaren (Flask-appen och formulärsidan som webbservern kör) ligger i `v38/app/` och `v38/public/`, och klonas in på servern av cloud-init vid deploy, se avsnitt 7.
+
 ## 1. Storage account
 
 Storage-konto (`StorageV2`), namn, region och sku (`Standard_LRS`/`Standard_GRS`) som parametrar, eftersom de skiljer sig mellan miljöer och namnet dessutom måste vara globalt unikt.
@@ -46,6 +48,12 @@ En hanterad identitet (`id-novatrix-app`) kopplad till webbservern, med rollen `
 
 De mänskliga RBAC-grupperna från v35 (Azure-Drift, Azure-Utveckling m.fl.) är medvetet utelämnade, v38 kräver VM, nätverk, säkerhet och storage, inte IAM.
 
+## 7. Ärendemottagare på webbservern
+
+Webbservern konfigureras helt av `customData` (cloud-init) i mallen: den klonar `v38/app/` och `v38/public/` från repot, installerar Flask-appen (`app.py`) bakom gunicorn som en systemd-tjänst, sätter upp nginx med ett självsignerat certifikat för HTTPS, och kopplar `/submit` till appen. Appen skriver ärenden till `arenden`-containern med webbserverns hanterade identitet, ingen nyckel i koden.
+
+`STORAGE_ACCOUNT` och identitetens `clientId` (känt först vid deploy) skickas in i `customData` via `format()` och `reference()` i mallen, så samma cloud-init fungerar oavsett vilken identitet som skapas.
+
 ## Parametrar att fylla i
 
 - `storageName` - måste vara globalt unikt
@@ -56,9 +64,9 @@ De mänskliga RBAC-grupperna från v35 (Azure-Drift, Azure-Utveckling m.fl.) är
 ## Kommandon
 
 ```
-az deployment group validate --resource-group rg-novatrix --template-file azuredeploy.json --parameters @azuredeploy.parameters.json
-az deployment group what-if --resource-group rg-novatrix --template-file azuredeploy.json --parameters @azuredeploy.parameters.json
-az deployment group create --resource-group rg-novatrix --template-file azuredeploy.json --parameters @azuredeploy.parameters.json
+az deployment group validate --resource-group rg-novatrix --template-file azuredeploy.json --parameters "@azuredeploy.parameters.json"
+az deployment group what-if --resource-group rg-novatrix --template-file azuredeploy.json --parameters "@azuredeploy.parameters.json"
+az deployment group create --resource-group rg-novatrix --template-file azuredeploy.json --parameters "@azuredeploy.parameters.json"
 ```
 
 ## Resultat
@@ -70,6 +78,8 @@ Verifierade rolltilldelningen separat: `az role assignment list --scope <contain
 Loggade in på hoppvärden med SSH för att bevisa att den faktiskt fungerar: `ssh -i novatrix_key azureuser-web@<publikt IP>`, kom in på Ubuntu 24.04.4, privat IP `10.0.3.4` i `snet-admin`, precis som avsett.
 
 Verifierade även med `az resource list`: samtliga 14 resurser finns i `rg-novatrix`, alla med `Succeeded`.
+
+Testade ärendemottagaren skarpt: skickade in ett testärende via formuläret på `https://<webPublicIp>/`, fick en tacksida med id `arende-2026-09-17-153315-8008a6`, och bekräftade i portalen att `arenden`-containern innehåller en mapp med samma namn. Mallens `outputs` ger `webPublicIp` och `jumpPublicIp` direkt efter deploy, så adresserna inte behöver hämtas separat.
 
 ## Versionshantering
 
@@ -85,7 +95,7 @@ Mallen och README:t är committade och pushade till GitHub.
 
 Ingen manuell klick i portalen behövs, allt styrs av `azuredeploy.json` och `azuredeploy.parameters.json`.
 
-Testat i praktiken på en tidigare, mindre version av mallen (storage, en NSG och VNet, tre resurser): rev hela `rg-novatrix`, klonade repot till en ren mapp, och körde stegen ovan. Alla tre resurser kom tillbaka med samma namn och samma beroende, `provisioningState: Succeeded`. Dagens fullständiga mall (fem resurser) är validerad och deployad, se Resultat ovan.
+Testat i praktiken på en tidigare, mindre version av mallen (storage, en NSG och VNet, tre resurser): rev hela `rg-novatrix`, klonade repot till en ren mapp, och körde stegen ovan. Alla tre resurser kom tillbaka med samma namn och samma beroende, `provisioningState: Succeeded`. Dagens fullständiga mall (14 resurser) är validerad och deployad, se Resultat ovan.
 
 <img src="images/rg-novatrix-resurser.png" alt="rg-novatrix vid den tidigare, mindre versionen: nsg-novatrix-web, stnovatrixv38idr och vnet-novatrix, 1 Succeeded deployment" width="750">
 <img src="images/rg-riven.png" alt="Resursgrupper efter rivning: bara NetworkWatcherRG kvar" width="750">
