@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.11.0",
+  "contentVersion": "1.0.12.0",
   "parameters": {
     "namePrefix": {
       "type": "string",
@@ -54,7 +54,7 @@
     "jumpNicName": "[format('nic-{0}', variables('jumpVmName'))]",
     "appIdentityName": "[format('id-{0}-app', parameters('namePrefix'))]",
     "storagePeName": "[format('pe-{0}-storage', parameters('namePrefix'))]",
-    "storageAccountName": "[format('{0}{1}', parameters('storageName'), uniqueString(resourceGroup().id))]"
+    "storageAccountName": "[format('{0}{1}', parameters('storageName'), substring(uniqueString(resourceGroup().id), 0, 6))]"
   },
   "resources": [
         {
