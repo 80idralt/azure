@@ -26,11 +26,22 @@ Storage-konto (`StorageV2`), namn, region och sku (`Standard_LRS`/`Standard_GRS`
 
 VNet med tre subnät (`snet-web`, `snet-db`, `snet-admin`), varsin NSG. Webbregeln (80, 443) är öppen för alla, databasregeln bara från webb-subnätet, admin-regeln bara från en given IP-parameter. Resursnamnen byggs från ett gemensamt prefix (`namePrefix`) via variabler, så allt hänger ihop och kan bytas på ett ställe.
 
+## 3. Storage-container
+
+En privat blob-container (`arenden`) för inskickade ärenden, `publicAccess: None`. Namnet är hårdkodat, det är applikationslogik snarare än något som varierar mellan miljöer.
+
+## 4. Hoppvärd
+
+En VM (`vm-novatrix-jump`) i `snet-admin`, med publikt IP och nätverkskort, samma mönster som webbservern. SSH tillåts bara från `adminIp` via `nsg-novatrix-admin`.
+
+VM-storleken (`vmSize`) blev `Standard_D2als_v6`, inte den ursprungliga `Standard_B2ats_v2`: kontot gick över till Pay-As-You-Go och fick tillfälligt 0 i kvot för hela B-seriens familjer i Sweden Central, bekräftat både via mallen och ett fristående test. D-seriens nyaste generation hade kvot och är dessutom billigast i den serien.
+
 ## Parametrar att fylla i
 
 - `storageName` - måste vara globalt unikt
-- `adminIp` - den egna publika IP-adressen, SSH-åtkomst till admin-subnätet begränsas till den
-- `namePrefix`, `location`, `sku` - har rimliga standardvärden, behöver oftast inte ändras
+- `adminIp` - den egna publika IP-adressen, ändras ofta eftersom hemmauppkopplingar sällan har fast IP
+- `sshPublicKey` - publik SSH-nyckel för inloggning på VM:arna
+- `namePrefix`, `location`, `sku`, `adminUsername`, `vmSize` - har rimliga standardvärden, behöver oftast inte ändras
 
 ## Kommandon
 
@@ -42,7 +53,9 @@ az deployment group create --resource-group rg-novatrix --template-file azuredep
 
 ## Resultat
 
-Validering och `what-if`: `provisioningState: Succeeded`, inget oväntat. Deploy: `provisioningState: Succeeded`, alla fem resurser skapade i `rg-novatrix` (`stnovatrixv38idr`, `nsg-novatrix-web`, `nsg-novatrix-db`, `nsg-novatrix-admin`, `vnet-novatrix`), beroendena mellan VNet och NSG:erna bekräftade i svaret. Mallens `outputs` (`storageAccountId`, `vnetId`) gav tillbaka rätt resurs-id:n.
+Validering och `what-if`: `provisioningState: Succeeded`, inget oväntat. Deploy: `provisioningState: Succeeded`, alla nio resurser skapade i `rg-novatrix` (storage-kontot, containern, tre NSG:er, VNet:et, det publika IP:t, nätverkskortet och hoppvärden), beroendena bekräftade i svaret. Mallens `outputs` (`storageAccountId`, `vnetId`) gav tillbaka rätt resurs-id:n.
+
+Loggade dessutom in på hoppvärden med SSH för att bevisa att den faktiskt fungerar, inte bara att den finns: `ssh -i novatrix_key azureuser-web@<publikt IP>`, kom in på Ubuntu 24.04.4, privat IP `10.0.3.4` i `snet-admin`, precis som avsett.
 
 ## Versionshantering
 

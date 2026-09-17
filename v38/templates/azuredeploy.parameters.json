@@ -6,6 +6,7 @@
     "location": { "value": "swedencentral" },
     "storageName": { "value": "stnovatrixv38idr" },
     "sku": { "value": "Standard_LRS" },
-    "adminIp": { "value": "31.208.56.106" }
+    "adminIp": { "value": "31.208.59.41" },
+    "sshPublicKey": { "value": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH1EKkSPh2AKPkkUMxJLrOK8/a3XPLQcDCCxpv3v/oJn novatrix-v38" }
   }
 }

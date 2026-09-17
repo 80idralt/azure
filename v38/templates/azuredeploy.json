@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.2.0",
+  "contentVersion": "1.0.3.0",
   "parameters": {
     "namePrefix": {
       "type": "string",
@@ -37,7 +37,7 @@
     },
     "vmSize": {
       "type": "string",
-      "defaultValue": "Standard_B2ats_v2",
+      "defaultValue": "Standard_D2als_v6",
       "metadata": { "description": "Storlek pa VM:arna." }
     }
   },
