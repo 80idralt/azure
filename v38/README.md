@@ -65,8 +65,8 @@ Kontot har `networkAcls` med `defaultAction: Deny` och en `ipRules`-post för `a
 ## Parametrar att fylla i
 
 - `storageName` - basnamnet för storage-kontot, görs automatiskt globalt unikt i mallen (se avsnitt 1), behöver inte bytas
-- `adminIp` - den egna publika IP-adressen. Parameterfilen har platshållarvärdet `BYT_UT_MOT_DIN_EGEN_IP`, deployen stoppas med ett tydligt fel om det inte byts ut. Ändra i den lokala kopian av `azuredeploy.parameters.json`, committa aldrig den riktiga IP:n
-- `sshPublicKey` - publik SSH-nyckel för inloggning på VM:arna. Samma sak, platshållaren `BYT_UT_MOT_DIN_EGEN_SSH_NYCKEL` måste bytas ut i den lokala kopian
+- `adminIp` - den egna publika IP-adressen. Placeholdern `BYT_UT_MOT_DIN_EGEN_IP` gör att deployen stoppas med ett tydligt fel om den inte byts ut
+- `sshPublicKey` - publik SSH-nyckel för inloggning på VM:arna. Samma sak för placeholdern `BYT_UT_MOT_DIN_EGEN_SSH_NYCKEL`
 - `namePrefix`, `location`, `sku`, `adminUsername`, `vmSize` - har rimliga standardvärden, behöver oftast inte ändras
 
 ## Kommandon
@@ -100,8 +100,9 @@ Mallen och README:t är committade och pushade till GitHub.
 ## Så återskapas miljön
 
 1. Klona repot och gå till `v38/templates`.
-2. `az group create --name rg-novatrix --location swedencentral` (om gruppen inte redan finns).
-3. Kör kommandona under Kommandon i ordning: validate, what-if, create.
+2. Öppna `azuredeploy.parameters.json` och fyll i egna värden, se Parametrar att fylla i.
+3. `az group create --name rg-novatrix --location swedencentral` (om gruppen inte redan finns).
+4. Kör kommandona under Kommandon i ordning: validate, what-if, create.
 
 Ingen manuell klick i portalen behövs, allt styrs av `azuredeploy.json` och `azuredeploy.parameters.json`.
 
