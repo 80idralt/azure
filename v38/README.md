@@ -54,6 +54,12 @@ Webbservern konfigureras helt av `customData` (cloud-init) i mallen: den klonar 
 
 `STORAGE_ACCOUNT` och identitetens `clientId` (känt först vid deploy) skickas in i `customData` via `format()` och `reference()` i mallen, så samma cloud-init fungerar oavsett vilken identitet som skapas.
 
+## 8. Nätverksskydd för lagringen
+
+En privat endpoint (`pe-novatrix-storage`) i `snet-db` kopplar storage-kontots blob-tjänst direkt till nätverket, med en privat DNS-zon (`privatelink.blob.core.windows.net`) länkad till `vnet-novatrix` så att kontots vanliga namn löser om till den privata adressen inifrån nätverket, ingen ändring behövs i appkoden.
+
+Kontot har `networkAcls` med `defaultAction: Deny` och en `ipRules`-post för `adminIp`, samma parameter som redan styr SSH-åtkomsten. Allt är stängt som standard, admin kommer ändå åt portalen för verifiering, och webbservern når lagringen via den privata endpointen oavsett. Containerns `publicAccess: None` (avsnitt 3) är ett separat lager som stänger anonym läsning helt, oberoende av nätverksreglerna.
+
 ## Parametrar att fylla i
 
 - `storageName` - måste vara globalt unikt
@@ -71,15 +77,17 @@ az deployment group create --resource-group rg-novatrix --template-file azuredep
 
 ## Resultat
 
-Validering och `what-if`: `provisioningState: Succeeded`, inget oväntat. Deploy: `provisioningState: Succeeded`, alla 14 resurser skapade i `rg-novatrix`, beroendena bekräftade i svaret. Mallens `outputs` gav tillbaka rätt resurs-id:n.
+Validering och `what-if`: `provisioningState: Succeeded`, inget oväntat. Deploy: `provisioningState: Succeeded`, alla 18 resurser skapade i `rg-novatrix`, beroendena bekräftade i svaret. Mallens `outputs` gav tillbaka rätt resurs-id:n.
 
 Verifierade rolltilldelningen separat: `az role assignment list --scope <container-id>` visar `Storage Blob Data Contributor` på identitetens principal, scopad exakt till `arenden`.
 
 Loggade in på hoppvärden med SSH för att bevisa att den faktiskt fungerar: `ssh -i novatrix_key azureuser-web@<publikt IP>`, kom in på Ubuntu 24.04.4, privat IP `10.0.3.4` i `snet-admin`, precis som avsett.
 
-Verifierade även med `az resource list`: samtliga 14 resurser finns i `rg-novatrix`, alla med `Succeeded`.
+Verifierade även med `az resource list`: samtliga 18 resurser finns i `rg-novatrix`, alla med `Succeeded`.
 
 Testade ärendemottagaren skarpt: skickade in ett testärende via formuläret på `https://<webPublicIp>/`, fick en tacksida med id `arende-2026-09-17-153315-8008a6`, och bekräftade i portalen att `arenden`-containern innehåller en mapp med samma namn. Mallens `outputs` ger `webPublicIp` och `jumpPublicIp` direkt efter deploy, så adresserna inte behöver hämtas separat.
+
+Verifierade nätverksskyddet i tre steg: `curl` mot blob-URL:en utifrån gav `AuthorizationFailure` innan `adminIp` lades till, och `PublicAccessNotPermitted` för anonym åtkomst även efter (containerns `publicAccess: None` håller oberoende av nätverksreglerna). `az storage account show` bekräftade `defaultAction: Deny` med `adminIp` som enda `ipRules`-post. Skickade ännu ett testärende (`arende-2026-09-17-155101-9281b8`) efter låsningen, det sparades utan problem via den privata endpointen, så webbserverns väg till lagringen påverkas inte av att allt annat är stängt.
 
 ## Versionshantering
 
@@ -95,7 +103,7 @@ Mallen och README:t är committade och pushade till GitHub.
 
 Ingen manuell klick i portalen behövs, allt styrs av `azuredeploy.json` och `azuredeploy.parameters.json`.
 
-Testat i praktiken på en tidigare, mindre version av mallen (storage, en NSG och VNet, tre resurser): rev hela `rg-novatrix`, klonade repot till en ren mapp, och körde stegen ovan. Alla tre resurser kom tillbaka med samma namn och samma beroende, `provisioningState: Succeeded`. Dagens fullständiga mall (14 resurser) är validerad och deployad, se Resultat ovan.
+Testat i praktiken på en tidigare, mindre version av mallen (storage, en NSG och VNet, tre resurser): rev hela `rg-novatrix`, klonade repot till en ren mapp, och körde stegen ovan. Alla tre resurser kom tillbaka med samma namn och samma beroende, `provisioningState: Succeeded`. Dagens fullständiga mall (18 resurser) är validerad och deployad, se Resultat ovan.
 
 <img src="images/rg-novatrix-resurser.png" alt="rg-novatrix vid den tidigare, mindre versionen: nsg-novatrix-web, stnovatrixv38idr och vnet-novatrix, 1 Succeeded deployment" width="750">
 <img src="images/rg-riven.png" alt="Resursgrupper efter rivning: bara NetworkWatcherRG kvar" width="750">

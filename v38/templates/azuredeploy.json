@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.8.0",
+  "contentVersion": "1.0.10.0",
   "parameters": {
     "namePrefix": {
       "type": "string",
@@ -52,7 +52,8 @@
     "jumpVmName": "[format('vm-{0}-jump', parameters('namePrefix'))]",
     "jumpPipName": "[format('pip-{0}', variables('jumpVmName'))]",
     "jumpNicName": "[format('nic-{0}', variables('jumpVmName'))]",
-    "appIdentityName": "[format('id-{0}-app', parameters('namePrefix'))]" 
+    "appIdentityName": "[format('id-{0}-app', parameters('namePrefix'))]",
+    "storagePeName": "[format('pe-{0}-storage', parameters('namePrefix'))]"
   },
   "resources": [
         {
@@ -61,7 +62,19 @@
       "name": "[parameters('storageName')]",
       "location": "[parameters('location')]",
       "sku": { "name": "[parameters('sku')]" },
-      "kind": "StorageV2"
+      "kind": "StorageV2",
+             "properties": {
+        "publicNetworkAccess": "Enabled",
+        "networkAcls": {
+          "defaultAction": "Deny",
+          "ipRules": [
+            {
+              "value": "[parameters('adminIp')]",
+              "action": "Allow"
+            }
+          ]
+        }
+      }
     },
      {
       "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
@@ -389,7 +402,72 @@
         "principalType": "ServicePrincipal",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
       }
-    } 
+    },
+       {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "privatelink.blob.core.windows.net",
+      "location": "global"
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[format('privatelink.blob.core.windows.net/link-{0}', parameters('namePrefix'))]",
+      "location": "global",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.blob.core.windows.net')]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('storagePeName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "subnet": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'snet-db')]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "[variables('storagePeName')]",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]",
+              "groupIds": ["blob"]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[format('{0}/default', variables('storagePeName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateEndpoints', variables('storagePeName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.blob.core.windows.net')]"
+      ],
+      "properties": {
+        "privateDnsZoneConfigs": [
+          {
+            "name": "config1",
+            "properties": {
+              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.blob.core.windows.net')]"
+            }
+          }
+        ]
+      }
+    }  
   ],
   "outputs": {
     "storageAccountId": {
