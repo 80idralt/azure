@@ -42,7 +42,7 @@ az deployment group create --resource-group rg-novatrix --template-file azuredep
 
 ## Resultat
 
-Validering och `what-if`: `provisioningState: Succeeded`, inget oväntat. Deploy: `provisioningState: Succeeded`, alla fem resurser skapade i `rg-novatrix` (`stnovatrixv38idr`, `nsg-novatrix-web`, `nsg-novatrix-db`, `nsg-novatrix-admin`, `vnet-novatrix`), beroendena mellan VNet och NSG:erna bekräftade i svaret.
+Validering och `what-if`: `provisioningState: Succeeded`, inget oväntat. Deploy: `provisioningState: Succeeded`, alla fem resurser skapade i `rg-novatrix` (`stnovatrixv38idr`, `nsg-novatrix-web`, `nsg-novatrix-db`, `nsg-novatrix-admin`, `vnet-novatrix`), beroendena mellan VNet och NSG:erna bekräftade i svaret. Mallens `outputs` (`storageAccountId`, `vnetId`) gav tillbaka rätt resurs-id:n.
 
 ## Versionshantering
 
