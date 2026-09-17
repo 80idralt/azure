@@ -100,7 +100,9 @@ Verifierade nätverksskyddet i tre steg: `curl` mot blob-URL:en utifrån gav `Au
 
 ## Versionshantering
 
-Mallen och README:t är committade och pushade till GitHub.
+Mallen och README:t är committade och pushade till GitHub, en commit per färdig och testad ändring.
+
+Det gör att drift kan se exakt vad som ändrades och varför (t.ex. bytet av `vmSize` när kvoten löstes, eller tillägget av den privata endpointen), rulla tillbaka till en tidigare fungerande version om en deploy går fel, och flera personer kan jobba i samma repo utan att skriva över varandras ändringar.
 
 <img src="images/readme-commit-diff.png" alt="Diff av README.md-commiten på GitHub" width="750">
 
