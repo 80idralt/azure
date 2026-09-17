@@ -36,6 +36,10 @@ En VM (`vm-novatrix-jump`) i `snet-admin`, med publikt IP och nätverkskort, sam
 
 VM-storleken (`vmSize`) blev `Standard_D2als_v6`, inte den ursprungliga `Standard_B2ats_v2`: kontot gick över till Pay-As-You-Go och fick tillfälligt 0 i kvot för hela B-seriens familjer i Sweden Central, bekräftat både via mallen och ett fristående test. D-seriens nyaste generation hade kvot och är dessutom billigast i den serien.
 
+## 5. Webbserver
+
+En VM (`vm-novatrix-web`) i `snet-web`, med publikt IP och nätverkskort, nås via HTTP/HTTPS enligt `nsg-novatrix-web`.
+
 ## Parametrar att fylla i
 
 - `storageName` - måste vara globalt unikt
@@ -53,9 +57,9 @@ az deployment group create --resource-group rg-novatrix --template-file azuredep
 
 ## Resultat
 
-Validering och `what-if`: `provisioningState: Succeeded`, inget oväntat. Deploy: `provisioningState: Succeeded`, alla nio resurser skapade i `rg-novatrix` (storage-kontot, containern, tre NSG:er, VNet:et, det publika IP:t, nätverkskortet och hoppvärden), beroendena bekräftade i svaret. Mallens `outputs` (`storageAccountId`, `vnetId`) gav tillbaka rätt resurs-id:n.
+Validering och `what-if`: `provisioningState: Succeeded`, inget oväntat. Deploy: `provisioningState: Succeeded`, alla tolv resurser skapade i `rg-novatrix` (storage-kontot, containern, tre NSG:er, VNet:et, båda publika IP:na, båda nätverkskorten, hoppvärden och webbservern), beroendena bekräftade i svaret. Mallens `outputs` gav tillbaka rätt resurs-id:n.
 
-Loggade dessutom in på hoppvärden med SSH för att bevisa att den faktiskt fungerar, inte bara att den finns: `ssh -i novatrix_key azureuser-web@<publikt IP>`, kom in på Ubuntu 24.04.4, privat IP `10.0.3.4` i `snet-admin`, precis som avsett.
+Loggade in på hoppvärden med SSH för att bevisa att den faktiskt fungerar: `ssh -i novatrix_key azureuser-web@<publikt IP>`, kom in på Ubuntu 24.04.4, privat IP `10.0.3.4` i `snet-admin`, precis som avsett.
 
 ## Versionshantering
 
