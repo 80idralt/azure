@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.0.0",
+  "contentVersion": "1.0.2.0",
   "parameters": {
     "namePrefix": {
       "type": "string",
@@ -25,13 +25,30 @@
         "adminIp": {
       "type": "string",
       "metadata": { "description": "Publik IP som far SSH-tillgang till hoppvarden." }
+    },
+        "sshPublicKey": {
+      "type": "string",
+      "metadata": { "description": "Publik SSH-nyckel for att logga in pa servrarna." }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "azureuser-web",
+      "metadata": { "description": "Adminanvandare pa VM:arna." }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_B2ats_v2",
+      "metadata": { "description": "Storlek pa VM:arna." }
     }
   },
   "variables": {
     "nsgWebName": "[format('nsg-{0}-web', parameters('namePrefix'))]",
     "vnetName": "[format('vnet-{0}', parameters('namePrefix'))]",
     "nsgDbName": "[format('nsg-{0}-db', parameters('namePrefix'))]",
-    "nsgAdminName": "[format('nsg-{0}-admin', parameters('namePrefix'))]"
+    "nsgAdminName": "[format('nsg-{0}-admin', parameters('namePrefix'))]",
+    "jumpVmName": "[format('vm-{0}-jump', parameters('namePrefix'))]",
+    "jumpPipName": "[format('pip-{0}', variables('jumpVmName'))]",
+    "jumpNicName": "[format('nic-{0}', variables('jumpVmName'))]"
   },
   "resources": [
         {
@@ -42,6 +59,18 @@
       "sku": { "name": "[parameters('sku')]" },
       "kind": "StorageV2"
     },
+     {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/default/arenden', parameters('storageName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+      ],
+      "properties": {
+        "publicAccess": "None"
+      }
+    },
+   
     {
       "type": "Microsoft.Network/networkSecurityGroups",
       "apiVersion": "2023-09-01",
@@ -154,6 +183,92 @@
             }
           }
         ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('jumpPipName')]",
+      "location": "[parameters('location')]",
+      "sku": { "name": "Standard" },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('jumpNicName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('jumpPipName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'snet-admin')]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('jumpPipName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('jumpVmName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('jumpNicName'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[variables('jumpVmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "linuxConfiguration": {
+            "disablePasswordAuthentication": true,
+            "ssh": {
+              "publicKeys": [
+                {
+                  "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+                  "keyData": "[parameters('sshPublicKey')]"
+                }
+              ]
+            }
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "ubuntu-24_04-lts",
+            "sku": "server",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[format('{0}-osdisk', variables('jumpVmName'))]",
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "Standard_LRS"
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('jumpNicName'))]"
+            }
+          ]
+        }
       }
     }
 
