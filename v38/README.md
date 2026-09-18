@@ -144,10 +144,5 @@ c93ac61 v38: ARM-mall för storage, NSG och VNet, parametriserad och deployad mo
 
 Ingen manuell klick i portalen behövs, allt styrs av `azuredeploy.json` och `azuredeploy.parameters.json`.
 
-Testat i praktiken på en tidigare, mindre version av mallen (storage, en NSG och VNet, tre resurser): rev hela `rg-novatrix`, klonade repot till en ren mapp, och körde stegen ovan. Alla tre resurser kom tillbaka med samma namn och samma beroende, `provisioningState: Succeeded`. Dagens fullständiga mall (18 resurser) är validerad och deployad, se Resultat ovan.
-
-<img src="images/rg-novatrix-resurser.png" alt="rg-novatrix vid den tidigare, mindre versionen: nsg-novatrix-web, stnovatrixv38idr och vnet-novatrix, 1 Succeeded deployment" width="750">
-<img src="images/rg-riven.png" alt="Resursgrupper efter rivning: bara NetworkWatcherRG kvar" width="750">
-<img src="images/rg-atskapad-tom.png" alt="rg-novatrix återskapad men tom, efter az group create" width="750">
-<img src="images/rg-novatrix-aterskapad.png" alt="rg-novatrix med alla tre resurser tillbaka, byggt från den rena klonen" width="750">
+Testat i praktiken med hela den fullständiga mallen (18 resurser): klonat repot rakt av på en helt fristående maskin, i en annan Azure-prenumeration, utan något lokalt tillstånd kvar från utvecklingsdatorn. `validate`, `what-if` och `create` gick igenom rent där också, och samma ärendeformulär fungerade, se Resultat ovan.
 
