@@ -69,7 +69,7 @@ Kontot har `networkAcls` med `defaultAction: Deny` och en `ipRules`-post för `a
   ```
   (Invoke-RestMethod -Uri "https://api.ipify.org")
   ```
-- `sshPublicKey` - publik SSH-nyckel för inloggning på VM:arna. Samma sak för placeholdern `BYT_UT_MOT_DIN_EGEN_SSH_NYCKEL`. Visa en befintlig nyckel med:
+- `sshPublicKey` - publik SSH-nyckel för inloggning. Samma sak för placeholdern `BYT_UT_MOT_DIN_EGEN_SSH_NYCKEL`. Visa en befintlig nyckel med:
   ```
   Get-Content $HOME\.ssh\id_ed25519.pub
   ```
