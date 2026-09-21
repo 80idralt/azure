@@ -8,6 +8,5 @@
     "sku": { "value": "Standard_LRS" },
     "adminIp": { "value": "BYT_UT_MOT_DIN_EGEN_IP" },
     "sshPublicKey": { "value": "BYT_UT_MOT_DIN_EGEN_SSH_NYCKEL" }
-    
   }
 }
