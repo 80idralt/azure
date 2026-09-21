@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.12.0",
+  "contentVersion": "1.0.13.0",
   "parameters": {
     "namePrefix": {
       "type": "string",
@@ -486,7 +486,11 @@
     "jumpPublicIp": {
       "type": "string",
       "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('jumpPipName'))).ipAddress]"
-    }   
+    },
+    "webUrl": {
+      "type": "string",
+      "value": "[format('https://{0}/', reference(resourceId('Microsoft.Network/publicIPAddresses', variables('webPipName'))).ipAddress)]"
+    }
   }
 }
 
