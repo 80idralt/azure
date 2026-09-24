@@ -23,6 +23,7 @@ Inställningarna nedan kommer från miljövariabler som systemd-tjänsten
 sätter, så samma fil fungerar i vilken miljö som helst utan ändring.
 """
 
+import base64
 import json
 import os
 import urllib.request
@@ -103,17 +104,30 @@ def submit():
         content_settings=ContentSettings(content_type="application/json"),
     )
 
-    # 4. Om en bild bifogades, spara den bredvid i samma mapp.
+    # 4. Om en bild bifogades, spara den bredvid i samma mapp. Läser hela
+    #    filen till minnet en gång, så samma bytes kan både laddas upp och
+    #    (nedan) base64-kodas till flödet - bilagan är oftast en liten
+    #    skärmdump, inte en video, så det är inget minnesproblem.
     bilaga = request.files.get("attachment")
+    bild_namn = ""
+    bild_data = ""
     if bilaga and bilaga.filename:
+        bild_namn = bilaga.filename
+        bild_bytes = bilaga.read()
         container.upload_blob(
-            name=f"{arende_id}/{bilaga.filename}",
-            data=bilaga.stream,
+            name=f"{arende_id}/{bild_namn}",
+            data=bild_bytes,
             overwrite=True,
         )
+        # Lagringskontot är nätverkslåst (bara adminIp/privat endpoint kommer
+        # in), så Power Automate kan aldrig hämta bilden via en blob-länk.
+        # Skickar därför själva bildinnehållet i samma anrop istället.
+        bild_data = base64.b64encode(bild_bytes).decode("ascii")
 
-    # 5. Meddela Power Automate-flödet, om det är konfigurerat.
-    notifiera_flode(arende)
+    # 5. Meddela Power Automate-flödet, om det är konfigurerat. Bilden skickas
+    #    bara med hit, inte i arende.json - det blobbade ärendet ska förbli
+    #    litet och läsbart, inte svällas av base64-data.
+    notifiera_flode({**arende, "bildNamn": bild_namn, "bildData": bild_data})
 
     # 6. Visa en enkel tack-sida med ärende-id:t.
     return Response(
