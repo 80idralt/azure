@@ -130,7 +130,7 @@ Fler mottagare i Teams-kanalen beroende på ärendetyp, en regel som flaggar br�
 
 ## Flödesdefinitionen i repot
 
-*(görs efter sista testkörningen)* Flödet exporteras via Lösningar (ohanterad zip) och `Workflows`-mappens JSON committas i `v39/flow/`, så flödeslogiken versionshanteras som text precis som resten av lösningen - inte bara byggd i portalen.
+Flödet är exporterat via Lösningar (ohanterad zip) och `Workflows`-mappens JSON ligger committad som [`v39/flow/novatrix-arende-till-flode.json`](flow/novatrix-arende-till-flode.json), så flödeslogiken versionshanteras som text precis som resten av lösningen - inte bara byggd i portalen.
 
 ## Parametrar att fylla i
 

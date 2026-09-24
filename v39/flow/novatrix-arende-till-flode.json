@@ -1,0 +1,196 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_office365": {
+        "runtimeSource": "embedded",
+        "connection": {
+          "connectionReferenceLogicalName": "new_sharedoffice365_4fd6c"
+        },
+        "api": {
+          "name": "shared_office365"
+        }
+      },
+      "shared_teams": {
+        "runtimeSource": "embedded",
+        "connection": {
+          "connectionReferenceLogicalName": "new_sharedteams_82f6d"
+        },
+        "api": {
+          "name": "shared_teams"
+        }
+      },
+      "shared_sharepointonline": {
+        "runtimeSource": "embedded",
+        "connection": {
+          "connectionReferenceLogicalName": "new_sharedsharepointonline_f49f4"
+        },
+        "api": {
+          "name": "shared_sharepointonline"
+        }
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        },
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {},
+          "type": "Request",
+          "kind": "Http",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "namn": {
+                  "type": "string"
+                },
+                "epost": {
+                  "type": "string"
+                },
+                "meddelande": {
+                  "type": "string"
+                },
+                "skapat": {
+                  "type": "string"
+                },
+                "bildNamn": {
+                  "type": "string"
+                },
+                "bildData": {
+                  "type": "string"
+                }
+              }
+            },
+            "triggerAuthenticationType": "All"
+          }
+        }
+      },
+      "actions": {
+        "Villkor": {
+          "actions": {
+            "Skicka_e-postmeddelande_med_bilaga": {
+              "type": "OpenApiConnection",
+              "inputs": {
+                "parameters": {
+                  "emailMessage/To": "giremiramov@Altun1980.onmicrosoft.com",
+                  "emailMessage/Subject": "Nytt ärende från hemsidan",
+                  "emailMessage/Body": "<p class=\"editor-paragraph\">Hejsan @{triggerBody()?['namn']}</p><p class=\"editor-paragraph\">Ärendet har tagits emot!</p><p class=\"editor-paragraph\">@{triggerBody()?['id']}</p><p class=\"editor-paragraph\">@{triggerBody()?['skapat']}</p><p class=\"editor-paragraph\">@{triggerBody()?['meddelande']}</p><br>",
+                  "emailMessage/Attachments": [
+                    {
+                      "Name": "@triggerBody()?['bildNamn']",
+                      "ContentBytes": "@base64ToBinary(triggerBody()?['bildData'])"
+                    }
+                  ],
+                  "emailMessage/Importance": "Normal"
+                },
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+                  "connectionName": "shared_office365",
+                  "operationId": "SendEmailV2"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            }
+          },
+          "runAfter": {
+            "Skapa_objekt_i_Ärendelistan": [
+              "Succeeded"
+            ]
+          },
+          "else": {
+            "actions": {
+              "Skicka_e-postmeddelande_utan_bilaga": {
+                "type": "OpenApiConnection",
+                "inputs": {
+                  "parameters": {
+                    "emailMessage/To": "giremiramov@Altun1980.onmicrosoft.com",
+                    "emailMessage/Subject": "Nytt ärende från hemsidan",
+                    "emailMessage/Body": "<p class=\"editor-paragraph\">Hejsan @{triggerBody()?['namn']}</p><p class=\"editor-paragraph\">Ärendet har tagits emot!</p><p class=\"editor-paragraph\">@{triggerBody()?['id']}</p><p class=\"editor-paragraph\">@{triggerBody()?['skapat']}</p><p class=\"editor-paragraph\">@{triggerBody()?['meddelande']}</p><br>",
+                    "emailMessage/Importance": "Normal"
+                  },
+                  "host": {
+                    "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+                    "connectionName": "shared_office365",
+                    "operationId": "SendEmailV2"
+                  },
+                  "authentication": "@parameters('$authentication')"
+                }
+              }
+            }
+          },
+          "expression": {
+            "and": [
+              {
+                "not": {
+                  "equals": [
+                    "@triggerBody()?['bildNamn']",
+                    ""
+                  ]
+                }
+              }
+            ]
+          },
+          "type": "If"
+        },
+        "Publicera_kort_i_en_chatt_eller_en_kanal": {
+          "runAfter": {},
+          "type": "OpenApiConnection",
+          "inputs": {
+            "parameters": {
+              "poster": "Flow bot",
+              "location": "Channel",
+              "body/recipient/groupId": "700a7888-28a3-4b70-91ce-8d3c8869e275",
+              "body/recipient/channelId": "19:XhCHlzr3ibYD7YVGTP_2outk1b5skREwf9LKZEz7ChE1@thread.tacv2",
+              "body/messageBody": "{\n  \"type\": \"AdaptiveCard\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"size\": \"Medium\",\n      \"weight\": \"Bolder\",\n      \"text\": \"Nytt kundtjänstärende inkommet\",\n      \"color\": \"Accent\"\n    },\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        {\n          \"title\": \"ID:\",\n          \"value\": \"@{triggerBody()?['id']}\"\n        },\n        {\n          \"title\": \"Namn:\",\n          \"value\": \"@{triggerBody()?['namn']}\"\n        },\n        {\n          \"title\": \"E-post:\",\n          \"value\": \"@{triggerBody()?['epost']}\"\n        }\n      ]\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"Meddelande:\",\n      \"weight\": \"Bolder\",\n      \"spacing\": \"Medium\"\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"@{triggerBody()?['meddelande']}\",\n      \"wrap\": true\n    }\n  ],\n  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n  \"version\": \"1.4\"\n}"
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_teams",
+              "connectionName": "shared_teams",
+              "operationId": "PostCardToConversation"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Skapa_objekt_i_Ärendelistan": {
+          "runAfter": {
+            "Publicera_kort_i_en_chatt_eller_en_kanal": [
+              "Succeeded"
+            ]
+          },
+          "type": "OpenApiConnection",
+          "inputs": {
+            "parameters": {
+              "dataset": "https://altun1980.sharepoint.com/sites/Novatrix/",
+              "table": "b503495d-8310-42b6-9953-3f9fa2168cb5",
+              "item/Title": "@triggerBody()?['meddelande']",
+              "item/Avs_x00e4_ndare": "@triggerBody()?['namn']",
+              "item/Tidpunkt": "@triggerBody()?['skapat']"
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+              "connectionName": "shared_sharepointonline",
+              "operationId": "PostItem"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      },
+      "outputs": {}
+    },
+    "templateName": null
+  },
+  "schemaVersion": "1.0.0.0"
+}
