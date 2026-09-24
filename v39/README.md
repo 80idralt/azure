@@ -99,8 +99,10 @@ En lista på Novatrix webbplats. Flödets steg **"Skapa objekt"** mappar:
 ```
 Title       <- triggerBody()?['meddelande']
 Avsändare   <- triggerBody()?['namn']
-Tidpunkt    <- triggerBody()?['skapat']
+Tidpunkt    <- concat(substring(triggerBody()?['skapat'], 0, 10), ' kl. ', substring(triggerBody()?['skapat'], 11, 2), ':', substring(triggerBody()?['skapat'], 13, 2))
 ```
+
+Tidpunkt formateras om till `2026-09-24 kl. 17:58` istället för det råa `skapat`-värdet (`2026-09-24-175847`) - samma uttryck används i båda mejl-varianterna i avsnitt 6, för läsbarhetens skull. Det råa formatet lever kvar orört i ärende-id:t och blob-namnen, bara visningen är omgjord.
 
 `Tidpunkt` är satt till **En rad med text**, inte ett riktigt datumfält. Ett första försök med SharePoints inbyggda datumtyp gav ett körfel (`Input parameter 'item/Tidpunkt' is invalid`), eftersom vårt tidsstämpelformat (`2026-09-24-121500`) inte är ett giltigt SharePoint-datum. Text löser det utan att appen behöver formatera om något - avvägningen är att kolumnen inte går att sortera kronologiskt som ett riktigt datum, vilket är okej för ett ärenderegister i den här skalan.
 

@@ -87,7 +87,7 @@
                 "parameters": {
                   "emailMessage/To": "giremiramov@Altun1980.onmicrosoft.com",
                   "emailMessage/Subject": "Nytt ärende från hemsidan",
-                  "emailMessage/Body": "<p class=\"editor-paragraph\">Hejsan @{triggerBody()?['namn']}</p><p class=\"editor-paragraph\">Ärendet har tagits emot!</p><p class=\"editor-paragraph\">@{triggerBody()?['id']}</p><p class=\"editor-paragraph\">@{triggerBody()?['skapat']}</p><p class=\"editor-paragraph\">@{triggerBody()?['meddelande']}</p><br>",
+                  "emailMessage/Body": "<p class=\"editor-paragraph\">Hejsan @{triggerBody()?['namn']}</p><p class=\"editor-paragraph\">Ärendet har tagits emot!</p><p class=\"editor-paragraph\">@{triggerBody()?['id']}</p><p class=\"editor-paragraph\">@{concat(substring(triggerBody()?['skapat'], 0, 10), ' kl. ', substring(triggerBody()?['skapat'], 11, 2), ':', substring(triggerBody()?['skapat'], 13, 2))}</p><p class=\"editor-paragraph\">@{triggerBody()?['meddelande']}</p><br>",
                   "emailMessage/Attachments": [
                     {
                       "Name": "@triggerBody()?['bildNamn']",
@@ -118,7 +118,7 @@
                   "parameters": {
                     "emailMessage/To": "giremiramov@Altun1980.onmicrosoft.com",
                     "emailMessage/Subject": "Nytt ärende från hemsidan",
-                    "emailMessage/Body": "<p class=\"editor-paragraph\">Hejsan @{triggerBody()?['namn']}</p><p class=\"editor-paragraph\">Ärendet har tagits emot!</p><p class=\"editor-paragraph\">@{triggerBody()?['id']}</p><p class=\"editor-paragraph\">@{triggerBody()?['skapat']}</p><p class=\"editor-paragraph\">@{triggerBody()?['meddelande']}</p><br>",
+                    "emailMessage/Body": "<p class=\"editor-paragraph\">Hejsan @{triggerBody()?['namn']}</p><p class=\"editor-paragraph\">Ärendet har tagits emot!</p><p class=\"editor-paragraph\">@{triggerBody()?['id']}</p><p class=\"editor-paragraph\">@{concat(substring(triggerBody()?['skapat'], 0, 10), ' kl. ', substring(triggerBody()?['skapat'], 11, 2), ':', substring(triggerBody()?['skapat'], 13, 2))}</p><p class=\"editor-paragraph\">@{triggerBody()?['meddelande']}</p><br>",
                     "emailMessage/Importance": "Normal"
                   },
                   "host": {
@@ -177,7 +177,7 @@
               "table": "b503495d-8310-42b6-9953-3f9fa2168cb5",
               "item/Title": "@triggerBody()?['meddelande']",
               "item/Avs_x00e4_ndare": "@triggerBody()?['namn']",
-              "item/Tidpunkt": "@triggerBody()?['skapat']"
+              "item/Tidpunkt": "@concat(substring(triggerBody()?['skapat'], 0, 10), ' kl. ', substring(triggerBody()?['skapat'], 11, 2), ':', substring(triggerBody()?['skapat'], 13, 2))"
             },
             "host": {
               "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
