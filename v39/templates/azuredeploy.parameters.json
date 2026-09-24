@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": { "value": "novatrix" },
+    "location": { "value": "swedencentral" },
+    "storageName": { "value": "stnovatrix" },
+    "sku": { "value": "Standard_LRS" },
+    "adminIp": { "value": "BYT_UT_MOT_DIN_EGEN_IP" },
+    "sshPublicKey": { "value": "BYT_UT_MOT_DIN_EGEN_SSH_NYCKEL" },
+    "flowUrl": { "value": "" }
+  }
+}

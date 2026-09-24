@@ -1,0 +1,509 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.13.0",
+  "parameters": {
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "novatrix",
+      "metadata": { "description": "Prefix for alla resursnamn, sa att allt hanger ihop." }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "swedencentral",
+      "metadata": { "description": "Region for resurserna." }
+    },
+    "storageName": {
+      "type": "string",
+      "metadata": { "description": "Namn for storage account." }
+    },
+    "sku": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": ["Standard_LRS", "Standard_GRS"],
+      "metadata": { "description": "Redundansniva for storage-kontot" }
+    },
+        "adminIp": {
+      "type": "string",
+      "metadata": { "description": "Publik IP som far SSH-tillgang till hoppvarden." }
+    },
+        "sshPublicKey": {
+      "type": "string",
+      "metadata": { "description": "Publik SSH-nyckel for att logga in pa servrarna." }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "azureuser-web",
+      "metadata": { "description": "Adminanvandare pa VM:arna." }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_B2ats_v2",
+      "metadata": { "description": "Storlek pa VM:arna." }
+    },
+    "flowUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": { "description": "Power Automate HTTP-triggerns URL. Tom = ingen notifiering skickas." }
+    },
+    "vmDiskControllerType": {
+      "type": "string",
+      "defaultValue": "SCSI",
+      "allowedValues": ["SCSI", "NVMe"],
+      "metadata": { "description": "Diskkontrollertyp, maste matcha vmSize (nyare Azure Boost-serier som Dv6 kraver NVMe)." }
+    }
+  },
+  "variables": {
+    "nsgWebName": "[format('nsg-{0}-web', parameters('namePrefix'))]",
+    "vnetName": "[format('vnet-{0}', parameters('namePrefix'))]",
+    "nsgDbName": "[format('nsg-{0}-db', parameters('namePrefix'))]",
+    "nsgAdminName": "[format('nsg-{0}-admin', parameters('namePrefix'))]",
+    "webVmName": "[format('vm-{0}-web', parameters('namePrefix'))]",
+    "webPipName": "[format('pip-{0}', variables('webVmName'))]",
+    "webNicName": "[format('nic-{0}', variables('webVmName'))]",
+    "jumpVmName": "[format('vm-{0}-jump', parameters('namePrefix'))]",
+    "jumpPipName": "[format('pip-{0}', variables('jumpVmName'))]",
+    "jumpNicName": "[format('nic-{0}', variables('jumpVmName'))]",
+    "appIdentityName": "[format('id-{0}-app', parameters('namePrefix'))]",
+    "storagePeName": "[format('pe-{0}-storage', parameters('namePrefix'))]",
+    "storageAccountName": "[format('{0}{1}', parameters('storageName'), substring(uniqueString(resourceGroup().id), 0, 6))]"
+  },
+  "resources": [
+        {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": { "name": "[parameters('sku')]" },
+      "kind": "StorageV2",
+             "properties": {
+        "publicNetworkAccess": "Enabled",
+        "networkAcls": {
+          "defaultAction": "Deny",
+          "ipRules": [
+            {
+              "value": "[parameters('adminIp')]",
+              "action": "Allow"
+            }
+          ]
+        }
+      }
+    },
+     {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/default/arenden', variables('storageAccountName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "publicAccess": "None"
+      }
+    },
+   
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nsgWebName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow-Http-Https",
+            "properties": {
+              "priority": 100,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourceAddressPrefix": "*",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRanges": ["80", "443"]
+            }
+          }
+        ]
+      }
+      },
+        {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('vnetName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgWebName'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgDbName'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgAdminName'))]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": ["10.0.0.0/16"]
+        },
+        "subnets": [
+          {
+            "name": "snet-web",
+            "properties": {
+              "addressPrefix": "10.0.1.0/24",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgWebName'))]"
+              }
+            }
+          },
+          {
+            "name": "snet-db",
+            "properties": {
+              "addressPrefix": "10.0.2.0/24",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgDbName'))]"
+              }
+            }
+          },
+          {
+            "name": "snet-admin",
+            "properties": {
+              "addressPrefix": "10.0.3.0/24",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgAdminName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nsgDbName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow-Web-To-Storage",
+            "properties": {
+              "priority": 100,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourceAddressPrefix": "10.0.1.0/24",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "443"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nsgAdminName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow-SSH-Admin",
+            "properties": {
+              "priority": 100,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourceAddressPrefix": "[parameters('adminIp')]",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "22"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('jumpPipName')]",
+      "location": "[parameters('location')]",
+      "sku": { "name": "Standard" },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('jumpNicName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('jumpPipName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'snet-admin')]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('jumpPipName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('jumpVmName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('jumpNicName'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[variables('jumpVmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "linuxConfiguration": {
+            "disablePasswordAuthentication": true,
+            "ssh": {
+              "publicKeys": [
+                {
+                  "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+                  "keyData": "[parameters('sshPublicKey')]"
+                }
+              ]
+            }
+          }
+        },
+        "storageProfile": {
+          "diskControllerType": "[parameters('vmDiskControllerType')]",
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "ubuntu-24_04-lts",
+            "sku": "server",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[format('{0}-osdisk', variables('jumpVmName'))]",
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "Standard_LRS"
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('jumpNicName'))]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('webPipName')]",
+      "location": "[parameters('location')]",
+      "sku": { "name": "Standard" },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('webNicName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('webPipName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'snet-web')]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('webPipName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('webVmName')]",
+      "location": "[parameters('location')]",
+            "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('webNicName'))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('appIdentityName'))]"
+      ],
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('appIdentityName'))]": {}
+        }
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[variables('webVmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "linuxConfiguration": {
+            "disablePasswordAuthentication": true,
+            "ssh": {
+              "publicKeys": [
+                {
+                  "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+                  "keyData": "[parameters('sshPublicKey')]"
+                }
+              ]
+            }
+          },
+          "customData": "[base64(format('#cloud-config\npackage_upgrade: true\npackages:\n- python3-venv\n- python3-pip\n- nginx\n- git\n- openssl\nwrite_files:\n- path: /etc/systemd/system/novatrix-form.service\n  content: |\n    [Unit]\n    Description=Novatrix arendemottagare (gunicorn)\n    After=network-online.target\n    Wants=network-online.target\n\n    [Service]\n    User=www-data\n    WorkingDirectory=/opt/novatrix\n    Environment=STORAGE_ACCOUNT={0}\n    Environment=CONTAINER=arenden\n    Environment=AZURE_CLIENT_ID={1}\n    Environment=FLOW_URL={2}\n    ExecStart=/opt/novatrix/venv/bin/gunicorn --bind 127.0.0.1:5000 app:app\n    Restart=on-failure\n\n    [Install]\n    WantedBy=multi-user.target\nruncmd:\n- git clone https://github.com/80idralt/azure.git /tmp/azure-repo\n- mkdir -p /opt/novatrix\n- cp /tmp/azure-repo/v39/app/app.py /opt/novatrix/app.py\n- cp /tmp/azure-repo/v39/app/requirements.txt /opt/novatrix/requirements.txt\n- cp /tmp/azure-repo/v39/public/index.html /var/www/html/index.html\n- cp /tmp/azure-repo/v39/app/nginx-arende.conf /etc/nginx/sites-available/default\n- python3 -m venv /opt/novatrix/venv\n- /opt/novatrix/venv/bin/pip install -r /opt/novatrix/requirements.txt\n- mkdir -p /etc/ssl/novatrix\n- openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/novatrix/novatrix.key -out /etc/ssl/novatrix/novatrix.crt -subj /CN=novatrix\n- chown -R www-data:www-data /opt/novatrix\n- systemctl daemon-reload\n- systemctl enable --now novatrix-form.service\n- systemctl restart nginx\n', variables('storageAccountName'), reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('appIdentityName')), '2023-01-31').clientId, parameters('flowUrl')))]"
+        },
+        "storageProfile": {
+          "diskControllerType": "[parameters('vmDiskControllerType')]",
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "ubuntu-24_04-lts",
+            "sku": "server",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[format('{0}-osdisk', variables('webVmName'))]",
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "Standard_LRS"
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('webNicName'))]"
+            }
+          ]
+        }
+      }
+    },
+     {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('appIdentityName')]",
+      "location": "[parameters('location')]"
+    },
+       {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'arenden'), variables('appIdentityName'))]",
+      "scope": "[format('Microsoft.Storage/storageAccounts/{0}/blobServices/default/containers/arenden', variables('storageAccountName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'arenden')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('appIdentityName'))]"
+      ],
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('appIdentityName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
+      }
+    },
+       {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "privatelink.blob.core.windows.net",
+      "location": "global"
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[format('privatelink.blob.core.windows.net/link-{0}', parameters('namePrefix'))]",
+      "location": "global",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.blob.core.windows.net')]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('storagePeName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "subnet": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'snet-db')]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "[variables('storagePeName')]",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+              "groupIds": ["blob"]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[format('{0}/default', variables('storagePeName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateEndpoints', variables('storagePeName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.blob.core.windows.net')]"
+      ],
+      "properties": {
+        "privateDnsZoneConfigs": [
+          {
+            "name": "config1",
+            "properties": {
+              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.blob.core.windows.net')]"
+            }
+          }
+        ]
+      }
+    }  
+  ],
+  "outputs": {
+    "storageAccountId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+    },
+    "vnetId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+    },
+     "webPublicIp": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('webPipName'))).ipAddress]"
+    },
+    "jumpPublicIp": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('jumpPipName'))).ipAddress]"
+    },
+    "webUrl": {
+      "type": "string",
+      "value": "[format('https://{0}/', reference(resourceId('Microsoft.Network/publicIPAddresses', variables('webPipName'))).ipAddress)]"
+    }
+  }
+}
+
