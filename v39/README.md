@@ -19,14 +19,14 @@ flowchart TD
     A["Besökare fyller i formuläret"] -->|"POST /submit"| B["app.py på webb-VM"]
     B -->|"skriver"| C[("Blob-container arenden")]
     B -->|"POST (FLOW_URL)"| D{{"Power Automate: HTTP-trigger"}}
-    D --> E["Teams: kort i kanalen Kundtjänst"]
-    D --> F["SharePoint: rad i Ärenderegister"]
-    D --> G{"Bild bifogad?"}
+    D --> S["Omfång: Teams-kort + SharePoint-rad"]
+    S -->|"Lyckades"| G{"Bild bifogad?"}
     G -->|Ja| H["Outlook: mejl med bilaga"]
     G -->|Nej| I["Outlook: mejl utan bilaga"]
+    S -->|"Misslyckades / hoppades över / timeout"| L["Outlook: larmmejl till Novatrix"]
 ```
 
-Blob-skrivningen och POST:en till flödet sker parallellt i appen, direkt efter varandra i samma funktion. Teams och SharePoint körs ovillkorligt för varje ärende - de bryr sig inte om bilden. Bara mejlet grenar, eftersom det är den enda åtgärden som faktiskt skiljer sig beroende på om en bild bifogades.
+Blob-skrivningen och POST:en till flödet sker parallellt i appen, direkt efter varandra i samma funktion. Teams och SharePoint ligger i ett gemensamt **Omfång** (Scope) - lyckas båda går flödet vidare till kundmejlet, brister något av dem går flödet istället till ett larmmejl. Se avsnitt "Om ett steg brister" för hur och varför.
 
 ## 1. HTTP-trigger istället för blob-trigger
 
@@ -147,7 +147,11 @@ Teams och SharePoint ligger före villkoret eftersom de inte bryr sig om bilden 
 
 ## Om ett steg brister
 
-Varje steg är satt att köra oavsett hur föregående steg gick (`runAfter: Succeeded, Failed, Skipped, TimedOut`), inte bara vid lyckat utfall som är Power Automates standard. Skulle till exempel Teams-anropet misslyckas (nere tjänst, ogiltig anslutning) fortsätter flödet ändå till SharePoint och mejlet - ett trasigt steg ska inte tysta ner resten av kedjan. Samma tanke som `try/except` runt `notifiera_flode()` i appen (avsnitt 3): en enskild del får strula utan att dra ner allt annat med sig.
+Teams-steget och SharePoint-steget ligger i ett gemensamt **Omfång** ("Scope"). Lyckas båda går flödet vidare till kundmejlet som vanligt. Brister något av dem larmar flödet istället: ett separat mejl går till Novatrix ("Larm: Fel i Novatrix"), konfigurerat att köra efter Omfånget med **"Har misslyckats", "Hoppades över"** och **"Tidsgränsen har uppnåtts"** ibockade - men **"Har lyckats" avbockad**, så larmet bara går vid faktiska problem.
+
+Inuti Omfånget kör SharePoint bara efter att Teams **lyckats** (inte vid alla utfall). Det är medvetet: om SharePoint ändå kört och lyckats trots att Teams brustit, hade Omfångets egen status kunnat visa "Lyckades" ändå (sista steget avgör), och larmet hade aldrig gått iväg. Genom att låta SharePoint stanna vid ett Teams-fel garanteras att Omfånget verkligen rapporterar "Misslyckades" så fort något internt går snett - pålitlig larmning prioriteras framför att pressa igenom så mycket som möjligt. Konsekvensen: vid ett internt fel uteblir både kundmejlet och ärenderegistret just den gången, bara larmet skickas. Ett medvetet, enklare val: antingen går allt igenom, eller så larmar vi - ingen halvfärdig mellanväg.
+
+Samma grundtanke som `try/except` runt `notifiera_flode()` i appen (avsnitt 3): ett trasigt steg ska aldrig tystas ner utan att någon får veta.
 
 ## Hur kedjan kan utökas
 

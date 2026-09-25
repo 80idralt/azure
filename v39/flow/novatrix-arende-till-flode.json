@@ -2,31 +2,31 @@
   "properties": {
     "connectionReferences": {
       "shared_office365": {
-        "runtimeSource": "embedded",
+        "api": {
+          "name": "shared_office365"
+        },
         "connection": {
           "connectionReferenceLogicalName": "new_sharedoffice365_4fd6c"
         },
-        "api": {
-          "name": "shared_office365"
-        }
+        "runtimeSource": "embedded"
       },
       "shared_teams": {
-        "runtimeSource": "embedded",
+        "api": {
+          "name": "shared_teams"
+        },
         "connection": {
           "connectionReferenceLogicalName": "new_sharedteams_82f6d"
         },
-        "api": {
-          "name": "shared_teams"
-        }
+        "runtimeSource": "embedded"
       },
       "shared_sharepointonline": {
-        "runtimeSource": "embedded",
+        "api": {
+          "name": "shared_sharepointonline"
+        },
         "connection": {
           "connectionReferenceLogicalName": "new_sharedsharepointonline_f49f4"
         },
-        "api": {
-          "name": "shared_sharepointonline"
-        }
+        "runtimeSource": "embedded"
       }
     },
     "definition": {
@@ -44,7 +44,6 @@
       },
       "triggers": {
         "manual": {
-          "metadata": {},
           "type": "Request",
           "kind": "Http",
           "inputs": {
@@ -75,11 +74,27 @@
                 }
               }
             }
+          },
+          "metadata": {
+            "operationMetadataId": "b8d07877-afb9-4879-8e07-b29fb86219dd"
           }
         }
       },
       "actions": {
         "Villkor": {
+          "type": "If",
+          "expression": {
+            "and": [
+              {
+                "not": {
+                  "equals": [
+                    "@triggerBody()?['bildNamn']",
+                    ""
+                  ]
+                }
+              }
+            ]
+          },
           "actions": {
             "Skicka_e-postmeddelande_med_bilaga": {
               "type": "OpenApiConnection",
@@ -101,16 +116,11 @@
                   "operationId": "SendEmailV2",
                   "connectionName": "shared_office365"
                 }
+              },
+              "metadata": {
+                "operationMetadataId": "607f3f64-09b9-41a4-a48f-2bbc062ccf4a"
               }
             }
-          },
-          "runAfter": {
-            "Skapa_objekt_i_Ärendelistan": [
-              "Succeeded",
-              "TimedOut",
-              "Skipped",
-              "Failed"
-            ]
           },
           "else": {
             "actions": {
@@ -128,65 +138,100 @@
                     "operationId": "SendEmailV2",
                     "connectionName": "shared_office365"
                   }
+                },
+                "metadata": {
+                  "operationMetadataId": "21a28923-2e85-4805-8de6-7b4b141d8e90"
                 }
               }
             }
           },
-          "expression": {
-            "and": [
-              {
-                "not": {
-                  "equals": [
-                    "@triggerBody()?['bildNamn']",
-                    ""
-                  ]
-                }
-              }
+          "runAfter": {
+            "Omfång": [
+              "Succeeded"
             ]
           },
-          "type": "If"
-        },
-        "Publicera_kort_i_en_chatt_eller_en_kanal": {
-          "runAfter": {},
-          "type": "OpenApiConnection",
-          "inputs": {
-            "parameters": {
-              "poster": "Flow bot",
-              "location": "Channel",
-              "body/recipient/groupId": "700a7888-28a3-4b70-91ce-8d3c8869e275",
-              "body/recipient/channelId": "19:XhCHlzr3ibYD7YVGTP_2outk1b5skREwf9LKZEz7ChE1@thread.tacv2",
-              "body/messageBody": "{\n  \"type\": \"AdaptiveCard\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"size\": \"Medium\",\n      \"weight\": \"Bolder\",\n      \"text\": \"Nytt kundtjänstärende inkommet\",\n      \"color\": \"Accent\"\n    },\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        {\n          \"title\": \"ID:\",\n          \"value\": \"@{triggerBody()?['id']}\"\n        },\n        {\n          \"title\": \"Namn:\",\n          \"value\": \"@{triggerBody()?['namn']}\"\n        },\n        {\n          \"title\": \"E-post:\",\n          \"value\": \"@{triggerBody()?['epost']}\"\n        }\n      ]\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"Meddelande:\",\n      \"weight\": \"Bolder\",\n      \"spacing\": \"Medium\"\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"@{triggerBody()?['meddelande']}\",\n      \"wrap\": true\n    }\n  ],\n  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n  \"version\": \"1.4\"\n}"
-            },
-            "host": {
-              "apiId": "/providers/Microsoft.PowerApps/apis/shared_teams",
-              "operationId": "PostCardToConversation",
-              "connectionName": "shared_teams"
-            }
+          "metadata": {
+            "operationMetadataId": "b4135697-a70e-4d7c-8b54-1faa18896cb3"
           }
         },
-        "Skapa_objekt_i_Ärendelistan": {
-          "runAfter": {
-            "Publicera_kort_i_en_chatt_eller_en_kanal": [
-              "Succeeded",
-              "TimedOut",
-              "Skipped",
-              "Failed"
-            ]
+        "Omfång": {
+          "type": "Scope",
+          "actions": {
+            "Publicera_kort_i_en_chatt_eller_en_kanal": {
+              "type": "OpenApiConnection",
+              "inputs": {
+                "parameters": {
+                  "poster": "Flow bot",
+                  "location": "Channel",
+                  "body/recipient/groupId": "700a7888-28a3-4b70-91ce-8d3c8869e275",
+                  "body/recipient/channelId": "19:XhCHlzr3ibYD7YVGTP_2outk1b5skREwf9LKZEz7ChE1@thread.tacv2",
+                  "body/messageBody": "{\n  \"type\": \"AdaptiveCard\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"size\": \"Medium\",\n      \"weight\": \"Bolder\",\n      \"text\": \"Nytt kundtjänstärende inkommet\",\n      \"color\": \"Accent\"\n    },\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        {\n          \"title\": \"ID:\",\n          \"value\": \"@{triggerBody()?['id']}\"\n        },\n        {\n          \"title\": \"Namn:\",\n          \"value\": \"@{triggerBody()?['namn']}\"\n        },\n        {\n          \"title\": \"E-post:\",\n          \"value\": \"@{triggerBody()?['epost']}\"\n        }\n      ]\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"Meddelande:\",\n      \"weight\": \"Bolder\",\n      \"spacing\": \"Medium\"\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"@{triggerBody()?['meddelande']}\",\n      \"wrap\": true\n    }\n  ],\n  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n  \"version\": \"1.4\"\n}"
+                },
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_teams",
+                  "operationId": "PostCardToConversation",
+                  "connectionName": "shared_teams"
+                }
+              },
+              "metadata": {
+                "operationMetadataId": "7ddccfa8-b465-44fd-915f-927052b4123e"
+              }
+            },
+            "Skapa_objekt_i_Ärendelistan": {
+              "type": "OpenApiConnection",
+              "inputs": {
+                "parameters": {
+                  "dataset": "https://altun1980.sharepoint.com/sites/Novatrix/",
+                  "table": "b503495d-8310-42b6-9953-3f9fa2168cb5",
+                  "item/Title": "@triggerBody()?['meddelande']",
+                  "item/Avs_x00e4_ndare": "@triggerBody()?['namn']",
+                  "item/Tidpunkt": "@concat(substring(triggerBody()?['skapat'], 0, 10), ' kl. ', substring(triggerBody()?['skapat'], 11, 2), ':', substring(triggerBody()?['skapat'], 13, 2))"
+                },
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                  "operationId": "PostItem",
+                  "connectionName": "shared_sharepointonline"
+                }
+              },
+              "runAfter": {
+                "Publicera_kort_i_en_chatt_eller_en_kanal": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "6a928c6c-5323-41e9-8158-03bd8985c9f1"
+              }
+            }
           },
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "81075cba-4d85-4382-a9f6-4f3154eb8303"
+          }
+        },
+        "Skicka_e-postmeddelande_(V2)": {
           "type": "OpenApiConnection",
           "inputs": {
             "parameters": {
-              "dataset": "https://altun1980.sharepoint.com/sites/Novatrix/",
-              "table": "b503495d-8310-42b6-9953-3f9fa2168cb5",
-              "item/Title": "@triggerBody()?['meddelande']",
-              "item/Avs_x00e4_ndare": "@triggerBody()?['namn']",
-              "item/Tidpunkt": "@concat(substring(triggerBody()?['skapat'], 0, 10), ' kl. ', substring(triggerBody()?['skapat'], 11, 2), ':', substring(triggerBody()?['skapat'], 13, 2))"
+              "emailMessage/To": "giremiramov@Altun1980.onmicrosoft.com",
+              "emailMessage/Subject": "Larm: Fel i Novatrix",
+              "emailMessage/Body": "<p>Något fel i flödet i novatrix-arende</p>",
+              "emailMessage/Importance": "Normal"
             },
             "host": {
-              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
-              "operationId": "PostItem",
-              "connectionName": "shared_sharepointonline"
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+              "operationId": "SendEmailV2",
+              "connectionName": "shared_office365"
             }
+          },
+          "runAfter": {
+            "Omfång": [
+              "Failed",
+              "Skipped",
+              "TimedOut"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "1ba929f7-8307-49a2-91be-94bbbdcf476b"
           }
         }
       },
