@@ -59,6 +59,21 @@ URL:en fungerar som en hemlighet - signaturen i frågesträngen är själva säk
 
 **Bugg på vägen:** URL:en innehåller `%`-tecken (`%2Ftriggers%2F...`), och systemd tolkar `%` som en specialkaraktär (specifier-expansion) i tjänstefiler. Första försöket tystade systemd ner hela `Environment=FLOW_URL=...`-raden helt utan felmeddelande - `systemctl show novatrix-form -p Environment` visade tre av fyra miljövariabler, `FLOW_URL` saknades spårlöst trots att rätt värde stod i själva tjänstefilen. Löst med `replace(parameters('flowUrl'), '%', '%%')` i mallen, så `%` dubbleras innan det skrivs in i unit-filen - systemd avkodar `%%` tillbaka till ett enda `%` när tjänsten faktiskt startar.
 
+Utdrag ur `azuredeploy.json`:
+
+```json
+"flowUrl": {
+  "type": "string",
+  "defaultValue": "",
+  "metadata": { "description": "Power Automate HTTP-triggerns URL. Tom = ingen notifiering skickas." }
+}
+```
+
+```
+Environment=FLOW_URL={2}
+```
+`{2}` är mallens `format()`-platshållare för `replace(parameters('flowUrl'), '%', '%%')` - fixen från stycket ovan.
+
 ## 3. Appen skickar vidare: notifiera_flode()
 
 ```python
@@ -122,9 +137,17 @@ base64ToBinary(triggerBody()?['bildData'])
 
 som avkodar texten till en riktig bildfil innan mejlet skickas.
 
+## Varför just dessa tjänster
+
+**Teams** ger kundtjänst ögonblicklig synlighet - någon ser ärendet inom sekunder, utan att aktivt leta. **SharePoint** är arkivet: till skillnad från en Teams-kanal, som rullar iväg i flödet av andra meddelanden, ligger ärenderegistret kvar sökbart och strukturerat så länge listan finns. **Outlook** är den enda av de tre som går till kunden, inte till Novatrix internt - en bekräftelse i kundens egen inkorg, oavsett om kunden själv använder Teams eller SharePoint.
+
 ## Varför den här ordningen
 
 Teams och SharePoint ligger före villkoret eftersom de inte bryr sig om bilden - att köra dem ovillkorligt håller flödet enkelt och undviker att duplicera två identiska SharePoint- och Teams-steg inne i varje gren. Mejlet kommer sist eftersom det är den enda åtgärden som behöver veta om en bild finns, för att välja rätt variant. Ordningen speglar också hur brådskande informationen är för kundtjänst: en snabb Teams-notis och en sökbar SharePoint-post är värdefulla direkt, medan mejlet till kunden är en bekräftelse som kan vänta någon sekund extra.
+
+## Om ett steg brister
+
+Varje steg är satt att köra oavsett hur föregående steg gick (`runAfter: Succeeded, Failed, Skipped, TimedOut`), inte bara vid lyckat utfall som är Power Automates standard. Skulle till exempel Teams-anropet misslyckas (nere tjänst, ogiltig anslutning) fortsätter flödet ändå till SharePoint och mejlet - ett trasigt steg ska inte tysta ner resten av kedjan. Samma tanke som `try/except` runt `notifiera_flode()` i appen (avsnitt 3): en enskild del får strula utan att dra ner allt annat med sig.
 
 ## Hur kedjan kan utökas
 

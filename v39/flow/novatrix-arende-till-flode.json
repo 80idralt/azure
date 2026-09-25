@@ -48,6 +48,7 @@
           "type": "Request",
           "kind": "Http",
           "inputs": {
+            "triggerAuthenticationType": "All",
             "schema": {
               "type": "object",
               "properties": {
@@ -73,8 +74,7 @@
                   "type": "string"
                 }
               }
-            },
-            "triggerAuthenticationType": "All"
+            }
           }
         }
       },
@@ -98,16 +98,18 @@
                 },
                 "host": {
                   "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
-                  "connectionName": "shared_office365",
-                  "operationId": "SendEmailV2"
-                },
-                "authentication": "@parameters('$authentication')"
+                  "operationId": "SendEmailV2",
+                  "connectionName": "shared_office365"
+                }
               }
             }
           },
           "runAfter": {
             "Skapa_objekt_i_Ärendelistan": [
-              "Succeeded"
+              "Succeeded",
+              "TimedOut",
+              "Skipped",
+              "Failed"
             ]
           },
           "else": {
@@ -123,10 +125,9 @@
                   },
                   "host": {
                     "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
-                    "connectionName": "shared_office365",
-                    "operationId": "SendEmailV2"
-                  },
-                  "authentication": "@parameters('$authentication')"
+                    "operationId": "SendEmailV2",
+                    "connectionName": "shared_office365"
+                  }
                 }
               }
             }
@@ -158,16 +159,18 @@
             },
             "host": {
               "apiId": "/providers/Microsoft.PowerApps/apis/shared_teams",
-              "connectionName": "shared_teams",
-              "operationId": "PostCardToConversation"
-            },
-            "authentication": "@parameters('$authentication')"
+              "operationId": "PostCardToConversation",
+              "connectionName": "shared_teams"
+            }
           }
         },
         "Skapa_objekt_i_Ärendelistan": {
           "runAfter": {
             "Publicera_kort_i_en_chatt_eller_en_kanal": [
-              "Succeeded"
+              "Succeeded",
+              "TimedOut",
+              "Skipped",
+              "Failed"
             ]
           },
           "type": "OpenApiConnection",
@@ -181,10 +184,9 @@
             },
             "host": {
               "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
-              "connectionName": "shared_sharepointonline",
-              "operationId": "PostItem"
-            },
-            "authentication": "@parameters('$authentication')"
+              "operationId": "PostItem",
+              "connectionName": "shared_sharepointonline"
+            }
           }
         }
       },
