@@ -28,7 +28,8 @@ import json
 import os
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from flask import Flask, request, Response
 from azure.identity import DefaultAzureCredential
@@ -86,7 +87,7 @@ def submit():
     #    + en kort slumpdel. Datum och tid först gör att mapparna sorterar
     #    sig i tidsordning. Slumpdelen ser till att två ärenden i samma
     #    sekund inte krockar. Exempel: arende-2026-09-10-111200-1c4d1e
-    stampel = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%S")
+    stampel = datetime.now(ZoneInfo("Europe/Stockholm")).strftime("%Y-%m-%d-%H%M%S")
     arende_id = f"arende-{stampel}-{uuid.uuid4().hex[:6]}"
 
     # 3. Spara själva ärendet som en JSON-fil, i en egen mapp per ärende.
