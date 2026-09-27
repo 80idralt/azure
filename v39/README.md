@@ -190,7 +190,16 @@ Flödet är exporterat via Lösningar (ohanterad zip) och `Workflows`-mappens JS
 ## Parametrar att fylla i
 
 - `flowUrl`, din egen flödes HTTP-trigger-URL. Byggs enligt avsnitt 1-6 ovan i ditt eget M365-konto. Tom = ingen notifiering skickas, men formuläret fungerar ändå.
-- `adminIp`, `sshPublicKey`, `namePrefix`, `storageName`, `sku`, `adminUsername`, `vmSize`, samma som v38, se den README:n för detaljer.
+- `adminIp`, din publika IP-adress. Bara den släpps in via SSH. Den kan ändras, till exempel när routern startar om, så ta fram den på nytt före varje deploy:
+  ```powershell
+  curl.exe -s https://api.ipify.org
+  ```
+- `sshPublicKey`, den publika delen av din SSH-nyckel. Visa den med:
+  ```powershell
+  Get-Content $HOME\.ssh\id_ed25519.pub
+  ```
+  Ger kommandot ett fel finns ingen nyckel än. Skapa en först med `ssh-keygen -t ed25519` (tryck Enter på alla frågor) och kör sedan raden ovan igen. Klistra in hela raden, från `ssh-ed25519` till slutet.
+- `namePrefix`, `storageName`, `sku`, `adminUsername`, `vmSize`, är redan ifyllda eller har standardvärden och behöver inte ändras, samma som v38, se den README:n för detaljer.
 - `vmDiskControllerType`, standard `SCSI`. Behöver bara ändras till `NVMe` om `vmSize` byts till en nyare VM-serie som Dv6, som inte kan starta med SCSI.
 
 VM:en hämtar appkoden direkt från det här repot vid uppstart (`git clone https://github.com/80idralt/azure.git` i mallens cloud-init). Det fungerar för alla så länge repot är publikt. Den som vill ändra i appen behöver forka repot och byta URL:en i `azuredeploy.json`.
