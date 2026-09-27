@@ -6,11 +6,11 @@
 
 **Klass:** MOV25
 
-**Datum:** 2026-09-24
+**Datum:** 2026-09-27
 
 ## Syfte
 
-Novatrix kundtjänst har hittills bara sparat inskickade ärenden i en lagringscontainer (v37-v38) - någon måste ändå gå in och leta i containern för att upptäcka att ett ärende kommit in. Veckans uppgift knyter ihop Azure-miljön med Microsoft 365, så att ett inskickat ärende automatiskt sätter kundtjänsten i rörelse: en post i SharePoints ärenderegister, en notis i Teams, och ett bekräftelsemejl i Outlook - allt utan att någon behöver leta manuellt. Kopplingen sköts av ett enda Power Automate-flöde.
+Novatrix kundtjänst har hittills bara sparat inskickade ärenden i en lagringscontainer (v37-v38), någon måste ändå gå in och leta i containern för att upptäcka att ett ärende kommit in. Veckans uppgift knyter ihop Azure-miljön med Microsoft 365, så att ett inskickat ärende automatiskt sätter kundtjänsten i rörelse: en post i SharePoints ärenderegister, en notis i Teams, och ett bekräftelsemejl i Outlook, allt utan att någon behöver leta manuellt. Kopplingen sköts av ett enda Power Automate-flöde.
 
 ## Arkitektur
 
@@ -26,11 +26,11 @@ flowchart TD
     S -->|"Misslyckades / hoppades över / timeout"| L["Outlook: larmmejl till Novatrix"]
 ```
 
-Blob-skrivningen och POST:en till flödet sker parallellt i appen, direkt efter varandra i samma funktion. Teams och SharePoint ligger i ett gemensamt **Omfång** (Scope) - lyckas båda går flödet vidare till kundmejlet, brister något av dem går flödet istället till ett larmmejl. Se avsnitt "Om ett steg brister" för hur och varför.
+Blob-skrivningen och POST:en till flödet sker parallellt i appen, direkt efter varandra i samma funktion. Teams och SharePoint ligger i ett gemensamt **Omfång** (Scope), lyckas båda går flödet vidare till kundmejlet, brister något av dem går flödet istället till ett larmmejl. Se avsnitt "Om ett steg brister" för hur och varför.
 
 ## 1. HTTP-trigger istället för blob-trigger
 
-Power Automates blob-trigger bevakar ett specifikt lagringskonto. Vårt kontonamn byggs med `uniqueString(resourceGroup().id)` i ARM-mallen (se v38), så det blir ett nytt namn vid varje omdeploy - en blob-trigger hade behövt kopplas om för hand varje gång miljön rivs och byggs upp igen, vilket händer ofta under utveckling.
+Power Automates blob-trigger bevakar ett specifikt lagringskonto. Vårt kontonamn byggs med `uniqueString(resourceGroup().id)` i ARM-mallen (se v38), så det blir ett nytt namn vid varje omdeploy, en blob-trigger hade behövt kopplas om för hand varje gång miljön rivs och byggs upp igen, vilket händer ofta under utveckling.
 
 HTTP-triggern löser det: den får en fast URL när flödet skapas en gång, och appen anropar den URL:en direkt efter varje sparat ärende. Kopplingen överlever hur många omdeployer som helst, så länge URL:en är känd av den som deployar.
 
@@ -51,13 +51,15 @@ HTTP-triggern löser det: den får en fast URL när flödet skapas en gång, och
 }
 ```
 
-"Vem kan utlösa flödet?" är satt till **Vem som helst** - annars kräver Microsoft Entra-autentisering för varje anrop, och appen har ingen inloggad användare att skicka en token för. Säkerheten ligger istället i att URL:en har en inbyggd signatur (`sig=`) som fungerar som ett lösenord.
+"Vem kan utlösa flödet?" är satt till **Vem som helst**, annars kräver Microsoft Entra-autentisering för varje anrop, och appen har ingen inloggad användare att skicka en token för. Säkerheten ligger istället i att URL:en har en inbyggd signatur (`sig=`) som fungerar som ett lösenord.
+
+URL:en skapas först när flödet sparats en gång. Öppna då triggern igen och kopiera fältet **HTTP-URL**, det är värdet som ska in i parametern `flowUrl`.
 
 ## 2. Säker hantering av flow-URL:en
 
-URL:en fungerar som en hemlighet - signaturen i frågesträngen är själva säkerheten, vem som helst med URL:en kan utlösa flödet. Den ligger därför aldrig hårdkodad i koden. Den skickas in som ARM-parametern `flowUrl` och sätts som miljövariabeln `FLOW_URL` på webb-VM:en via cloud-init. I det committade repot är parametern tom (`""`) - den som kör om miljön bygger sitt eget flöde och sätter sin egen URL lokalt, den committas aldrig.
+URL:en fungerar som en hemlighet, signaturen i frågesträngen är själva säkerheten, vem som helst med URL:en kan utlösa flödet. Den ligger därför aldrig hårdkodad i koden. Den skickas in som ARM-parametern `flowUrl` och sätts som miljövariabeln `FLOW_URL` på webb-VM:en via cloud-init. I det committade repot är parametern tom (`""`), den som kör om miljön bygger sitt eget flöde och sätter sin egen URL lokalt, den committas aldrig.
 
-**Bugg på vägen:** URL:en innehåller `%`-tecken (`%2Ftriggers%2F...`), och systemd tolkar `%` som en specialkaraktär (specifier-expansion) i tjänstefiler. Första försöket tystade systemd ner hela `Environment=FLOW_URL=...`-raden helt utan felmeddelande - `systemctl show novatrix-form -p Environment` visade tre av fyra miljövariabler, `FLOW_URL` saknades spårlöst trots att rätt värde stod i själva tjänstefilen. Löst med `replace(parameters('flowUrl'), '%', '%%')` i mallen, så `%` dubbleras innan det skrivs in i unit-filen - systemd avkodar `%%` tillbaka till ett enda `%` när tjänsten faktiskt startar.
+**Bugg på vägen:** URL:en innehåller `%`-tecken (`%2Ftriggers%2F...`), och systemd tolkar `%` som en specialkaraktär (specifier-expansion) i tjänstefiler. Första försöket tystade systemd ner hela `Environment=FLOW_URL=...`-raden helt utan felmeddelande, `systemctl show novatrix-form -p Environment` visade tre av fyra miljövariabler, `FLOW_URL` saknades spårlöst trots att rätt värde stod i själva tjänstefilen. Löst med `replace(parameters('flowUrl'), '%', '%%')` i mallen, så `%` dubbleras innan det skrivs in i unit-filen, systemd avkodar `%%` tillbaka till ett enda `%` när tjänsten faktiskt startar.
 
 Utdrag ur `azuredeploy.json`:
 
@@ -72,7 +74,7 @@ Utdrag ur `azuredeploy.json`:
 ```
 Environment=FLOW_URL={2}
 ```
-`{2}` är mallens `format()`-platshållare för `replace(parameters('flowUrl'), '%', '%%')` - fixen från stycket ovan.
+`{2}` är mallens `format()`-platshållare för `replace(parameters('flowUrl'), '%', '%%')`, fixen från stycket ovan.
 
 ## 3. Appen skickar vidare: notifiera_flode()
 
@@ -93,43 +95,65 @@ def notifiera_flode(arende):
         pass
 ```
 
-Inslaget i `try/except` med flit: ett nere flöde eller en trasig URL ska aldrig hindra ärendet från att sparas. Formuläret måste fungera även om M365-sidan strular - kunden ska aldrig se ett fel bara för att en notis inte gick fram.
+Inslaget i `try/except` med flit: ett nere flöde eller en trasig URL ska aldrig hindra ärendet från att sparas. Formuläret måste fungera även om M365-sidan strular, kunden ska aldrig se ett fel bara för att en notis inte gick fram.
 
 ## 4. Teams - kort i "Kundtjänst"
 
-Ett team `Novatrix` med kanalen `Kundtjänst`. Flödets steg **"Publicera kort i en chatt eller en kanal"** postar direkt från triggerns dynamiska innehåll, ovillkorligt för varje ärende:
+Ett team `Novatrix` med kanalen `Kundtjänst`, skapat i Teams innan flödet byggs. Flödets steg **"Publicera kort i en chatt eller en kanal"** postar ett kort i kanalen för varje ärende:
 
-```
-Rubrik:      Nytt kundtjänstärende inkommet
-ID:          triggerBody()?['id']
-Namn:        triggerBody()?['namn']
-E-post:      triggerBody()?['epost']
-Meddelande:  triggerBody()?['meddelande']
-```
+| Fält i kortet | Vad som visas | Uttryck i Power Automate |
+|---|---|---|
+| Rubrik | Fast text: "Nytt kundtjänstärende inkommet" | skrivs in som vanlig text |
+| ID | Ärendets id, t.ex. `arende-2026-09-24-175847-93f53d` | `triggerBody()?['id']` |
+| Namn | Kundens namn | `triggerBody()?['namn']` |
+| E-post | Kundens e-postadress | `triggerBody()?['epost']` |
+| Meddelande | Det kunden skrev | `triggerBody()?['meddelande']` |
+
+`triggerBody()?['namn']` betyder "ta fältet `namn` ur det som appen skickade till flödet". Frågetecknet gör att flödet inte kraschar om fältet skulle saknas.
 
 ## 5. SharePoint - "Ärenderegister"
 
-En lista på Novatrix webbplats. Flödets steg **"Skapa objekt"** mappar:
+En lista `Ärenderegister` på SharePoint-webbplatsen `Novatrix`, med de här kolumnerna:
+
+| Kolumn | Typ |
+|---|---|
+| Title (visas som Rubrik) | finns redan i varje ny lista |
+| Avsändare | En rad med text |
+| Tidpunkt | En rad med text |
+
+Flödets steg **"Skapa objekt"** fyller dem så här:
+
+| Kolumn | Vad som hamnar där | Uttryck i Power Automate |
+|---|---|---|
+| Title | Det kunden skrev | `triggerBody()?['meddelande']` |
+| Avsändare | Kundens namn | `triggerBody()?['namn']` |
+| Tidpunkt | När ärendet skapades, t.ex. `2026-09-24 kl. 17:58` | uttrycket nedan |
 
 ```
-Title       <- triggerBody()?['meddelande']
-Avsändare   <- triggerBody()?['namn']
-Tidpunkt    <- concat(substring(triggerBody()?['skapat'], 0, 10), ' kl. ', substring(triggerBody()?['skapat'], 11, 2), ':', substring(triggerBody()?['skapat'], 13, 2))
+concat(substring(triggerBody()?['skapat'], 0, 10), ' kl. ', substring(triggerBody()?['skapat'], 11, 2), ':', substring(triggerBody()?['skapat'], 13, 2))
 ```
 
-Tidpunkt formateras om till `2026-09-24 kl. 17:58` istället för det råa `skapat`-värdet (`2026-09-24-175847`) - samma uttryck används i båda mejl-varianterna i avsnitt 6, för läsbarhetens skull. Det råa formatet lever kvar orört i ärende-id:t och blob-namnen, bara visningen är omgjord.
+Appen skickar `skapat` som `2026-09-24-175847`, vilket är svårläst. Uttrycket plockar ut delar av texten med `substring(text, startposition, antal tecken)`:
 
-`Tidpunkt` är satt till **En rad med text**, inte ett riktigt datumfält. Ett första försök med SharePoints inbyggda datumtyp gav ett körfel (`Input parameter 'item/Tidpunkt' is invalid`), eftersom vårt tidsstämpelformat (`2026-09-24-121500`) inte är ett giltigt SharePoint-datum. Text löser det utan att appen behöver formatera om något - avvägningen är att kolumnen inte går att sortera kronologiskt som ett riktigt datum, vilket är okej för ett ärenderegister i den här skalan.
+| Del av uttrycket | Plockar ut | Resultat |
+|---|---|---|
+| `substring(..., 0, 10)` | tecken 0-9 | `2026-09-24` |
+| `substring(..., 11, 2)` | timmen | `17` |
+| `substring(..., 13, 2)` | minuterna | `58` |
+
+`concat` klistrar sedan ihop delarna med ` kl. ` och `:` emellan. Samma uttryck används i båda mejlvarianterna i avsnitt 6. Det råa formatet lever kvar orört i ärende-id:t och blob-namnen, bara visningen är omgjord.
+
+`Tidpunkt` är satt till **En rad med text**, inte ett riktigt datumfält. Ett första försök med SharePoints inbyggda datumtyp gav ett körfel (`Input parameter 'item/Tidpunkt' is invalid`), eftersom vårt tidsstämpelformat (`2026-09-24-121500`) inte är ett giltigt SharePoint-datum. Text löser det utan att appen behöver formatera om något, avvägningen är att kolumnen inte går att sortera kronologiskt som ett riktigt datum, vilket är okej för ett ärenderegister i den här skalan.
 
 ## 6. Villkorsstyrd e-post med bildbilaga
 
-Lagringskontot är nätverkslåst (bara `adminIp`/privat endpoint kommer in, se v38 avsnitt 8), så Power Automate kan aldrig hämta bilden via en blob-länk - Microsofts molntjänst har helt enkelt ingen väg in. Istället skickas bildens bytes base64-kodade i samma POST som resten av ärendet (`bildData`), och sparas separat till blob av appen som vanligt för arkivering.
+Lagringskontot är nätverkslåst (bara `adminIp`/privat endpoint kommer in, se v38 avsnitt 8), så Power Automate kan aldrig hämta bilden via en blob-länk, Microsofts molntjänst har helt enkelt ingen väg in. Istället skickas bildens bytes base64-kodade i samma POST som resten av ärendet (`bildData`), och sparas separat till blob av appen som vanligt för arkivering.
 
 Ett villkor kollar `bildNamn` **är inte lika med** tomt:
 - **Sant:** Outlook "Skicka e-postmeddelande (V2)" med bilaga.
 - **Falskt:** samma mejl, utan bilaga.
 
-**Bugg på vägen:** att bara mappa bilagefältet **Innehåll** direkt mot `bildData` gav en trasig bild i mejlet - Outlooks bilaga-fält vill ha binärdata, inte en rå base64-textsträng. Löst genom att byta fältet till uttrycket:
+**Bugg på vägen:** att bara mappa bilagefältet **Innehåll** direkt mot `bildData` gav en trasig bild i mejlet, Outlooks bilaga-fält vill ha binärdata, inte en rå base64-textsträng. Löst genom att byta fältet till uttrycket:
 
 ```
 base64ToBinary(triggerBody()?['bildData'])
@@ -139,17 +163,19 @@ som avkodar texten till en riktig bildfil innan mejlet skickas.
 
 ## Varför just dessa tjänster
 
-**Teams** ger kundtjänst ögonblicklig synlighet - någon ser ärendet inom sekunder, utan att aktivt leta. **SharePoint** är arkivet: till skillnad från en Teams-kanal, som rullar iväg i flödet av andra meddelanden, ligger ärenderegistret kvar sökbart och strukturerat så länge listan finns. **Outlook** är den enda av de tre som går till kunden, inte till Novatrix internt - en bekräftelse i kundens egen inkorg, oavsett om kunden själv använder Teams eller SharePoint.
+**Teams** ger kundtjänst ögonblicklig synlighet, någon ser ärendet inom sekunder, utan att aktivt leta. **SharePoint** är arkivet: till skillnad från en Teams-kanal, som rullar iväg i flödet av andra meddelanden, ligger ärenderegistret kvar sökbart och strukturerat så länge listan finns. **Outlook** är bekräftelsen till kunden, i kundens egen inkorg, oavsett om kunden själv använder Teams eller SharePoint.
+
+I den här testmiljön går mejlet till en fast testbrevlåda (`giremiramov@Altun1980.onmicrosoft.com`) i stället för till kundens adress, så att inga riktiga mejl skickas ut under utvecklingen. I skarpt läge sätts mottagaren (fältet **Till**) till `triggerBody()?['epost']`, alltså den adress kunden skrev i formuläret.
 
 ## Varför den här ordningen
 
-Teams och SharePoint ligger före villkoret eftersom de inte bryr sig om bilden - att köra dem ovillkorligt håller flödet enkelt och undviker att duplicera två identiska SharePoint- och Teams-steg inne i varje gren. Mejlet kommer sist eftersom det är den enda åtgärden som behöver veta om en bild finns, för att välja rätt variant. Ordningen speglar också hur brådskande informationen är för kundtjänst: en snabb Teams-notis och en sökbar SharePoint-post är värdefulla direkt, medan mejlet till kunden är en bekräftelse som kan vänta någon sekund extra.
+Teams och SharePoint ligger före villkoret eftersom de inte bryr sig om bilden, att köra dem ovillkorligt håller flödet enkelt och undviker att duplicera två identiska SharePoint- och Teams-steg inne i varje gren. Mejlet kommer sist eftersom det är den enda åtgärden som behöver veta om en bild finns, för att välja rätt variant. Ordningen speglar också hur brådskande informationen är för kundtjänst: en snabb Teams-notis och en sökbar SharePoint-post är värdefulla direkt, medan mejlet till kunden är en bekräftelse som kan vänta någon sekund extra.
 
 ## Om ett steg brister
 
-Teams-steget och SharePoint-steget ligger i ett gemensamt **Omfång** ("Scope"). Lyckas båda går flödet vidare till kundmejlet som vanligt. Brister något av dem larmar flödet istället: ett separat mejl går till Novatrix ("Larm: Fel i Novatrix"), konfigurerat att köra efter Omfånget med **"Har misslyckats", "Hoppades över"** och **"Tidsgränsen har uppnåtts"** ibockade - men **"Har lyckats" avbockad**, så larmet bara går vid faktiska problem.
+Teams-steget och SharePoint-steget ligger i ett gemensamt **Omfång** ("Scope"). Lyckas båda går flödet vidare till kundmejlet som vanligt. Brister något av dem larmar flödet istället: ett separat mejl går till Novatrix ("Larm: Fel i Novatrix"), konfigurerat att köra efter Omfånget med **"Har misslyckats", "Hoppades över"** och **"Tidsgränsen har uppnåtts"** ibockade, men **"Har lyckats" avbockad**, så larmet bara går vid faktiska problem.
 
-Inuti Omfånget kör SharePoint bara efter att Teams **lyckats** (inte vid alla utfall). Det är medvetet: om SharePoint ändå kört och lyckats trots att Teams brustit, hade Omfångets egen status kunnat visa "Lyckades" ändå (sista steget avgör), och larmet hade aldrig gått iväg. Genom att låta SharePoint stanna vid ett Teams-fel garanteras att Omfånget verkligen rapporterar "Misslyckades" så fort något internt går snett - pålitlig larmning prioriteras framför att pressa igenom så mycket som möjligt. Konsekvensen: vid ett internt fel uteblir både kundmejlet och ärenderegistret just den gången, bara larmet skickas. Ett medvetet, enklare val: antingen går allt igenom, eller så larmar vi - ingen halvfärdig mellanväg.
+Inuti Omfånget kör SharePoint bara efter att Teams **lyckats** (inte vid alla utfall). Det är medvetet: om SharePoint ändå kört och lyckats trots att Teams brustit, hade Omfångets egen status kunnat visa "Lyckades" ändå (sista steget avgör), och larmet hade aldrig gått iväg. Genom att låta SharePoint stanna vid ett Teams-fel garanteras att Omfånget verkligen rapporterar "Misslyckades" så fort något internt går snett, pålitlig larmning prioriteras framför att pressa igenom så mycket som möjligt. Konsekvensen: vid ett internt fel uteblir både kundmejlet och ärenderegistret just den gången, bara larmet skickas. Ett medvetet, enklare val: antingen går allt igenom, eller så larmar vi, ingen halvfärdig mellanväg.
 
 Samma grundtanke som `try/except` runt `notifiera_flode()` i appen (avsnitt 3): ett trasigt steg ska aldrig tystas ner utan att någon får veta.
 
@@ -159,14 +185,19 @@ Fler mottagare i Teams-kanalen beroende på ärendetyp, en regel som flaggar br�
 
 ## Flödesdefinitionen i repot
 
-Flödet är exporterat via Lösningar (ohanterad zip) och `Workflows`-mappens JSON ligger committad som [`v39/flow/novatrix-arende-till-flode.json`](flow/novatrix-arende-till-flode.json), så flödeslogiken versionshanteras som text precis som resten av lösningen - inte bara byggd i portalen.
+Flödet är exporterat via Lösningar (ohanterad zip) och `Workflows`-mappens JSON ligger committad som [`v39/flow/novatrix-arende-till-flode.json`](flow/novatrix-arende-till-flode.json), så flödeslogiken versionshanteras som text precis som resten av lösningen, inte bara byggd i portalen.
 
 ## Parametrar att fylla i
 
-- `flowUrl` - din egen flödes HTTP-trigger-URL. Byggs enligt avsnitt 1-6 ovan i ditt eget M365-konto. Tom = ingen notifiering skickas, men formuläret fungerar ändå.
-- `adminIp`, `sshPublicKey`, `namePrefix`, `storageName`, `sku`, `adminUsername`, `vmSize` - samma som v38, se den README:n för detaljer.
+- `flowUrl`, din egen flödes HTTP-trigger-URL. Byggs enligt avsnitt 1-6 ovan i ditt eget M365-konto. Tom = ingen notifiering skickas, men formuläret fungerar ändå.
+- `adminIp`, `sshPublicKey`, `namePrefix`, `storageName`, `sku`, `adminUsername`, `vmSize`, samma som v38, se den README:n för detaljer.
+- `vmDiskControllerType`, standard `SCSI`. Behöver bara ändras till `NVMe` om `vmSize` byts till en nyare VM-serie som Dv6, som inte kan starta med SCSI.
+
+VM:en hämtar appkoden direkt från det här repot vid uppstart (`git clone https://github.com/80idralt/azure.git` i mallens cloud-init). Det fungerar för alla så länge repot är publikt. Den som vill ändra i appen behöver forka repot och byta URL:en i `azuredeploy.json`.
 
 ## Kommandon
+
+Bygg miljön:
 
 ```
 az group create --name rg-novatrix --location swedencentral
@@ -174,9 +205,23 @@ az deployment group validate --resource-group rg-novatrix --template-file azured
 az deployment group create --resource-group rg-novatrix --template-file azuredeploy.json --parameters "@azuredeploy.parameters.json"
 ```
 
+Hämta formulärets adress:
+
+```
+az deployment group show --resource-group rg-novatrix --name azuredeploy --query properties.outputs.webUrl.value --output tsv
+```
+
+Det tar några minuter efter deploy innan cloud-init har installerat klart appen på VM:en. Certifikatet är självsignerat, så webbläsaren varnar första gången, välj att fortsätta ändå.
+
+Riv miljön när testet är klart:
+
+```
+az group delete --name rg-novatrix --yes --no-wait
+```
+
 ## Resultat
 
-Sista testet kördes skarpt genom hela kedjan med `Standard_B2ats_v2` (mallens riktiga standard - ingen genväg behövdes den här gången, kvoten var godkänd). Ett nytt ärende skickades in via formuläret:
+Sista testet kördes skarpt genom hela kedjan med `Standard_B2ats_v2` (mallens riktiga standard, ingen genväg behövdes den här gången, kvoten var godkänd). Ett nytt ärende skickades in via formuläret:
 
 ![Ifyllt formulär](images/formular-ifyllt.png)
 
@@ -186,7 +231,7 @@ Sista testet kördes skarpt genom hela kedjan med `Standard_B2ats_v2` (mallens r
 
 ![Blob-container med arende.json och bild](images/blob-bekraftelse.png)
 
-Flödets körhistorik visar status **"Lyckades"** för den här körningen, inte "Testet lyckades" - det bevisar att det var en äkta HTTP-trigger från VM:en, inte en manuell omkörning i designern. Alla fyra steg lyckades i en enda exekvering:
+Flödets körhistorik visar status **"Lyckades"** för den här körningen, inte "Testet lyckades", det bevisar att det var en äkta HTTP-trigger från VM:en, inte en manuell omkörning i designern. Alla fyra steg lyckades i en enda exekvering:
 
 ![Flödeskörning, alla steg gröna](images/flode-korning.png)
 
@@ -216,8 +261,17 @@ Flödets fullständiga struktur:
 ## Så återskapas miljön
 
 1. Klona repot, gå till `v39/templates`.
-2. Bygg ett eget Power Automate-flöde enligt avsnitt 1-6 (HTTP-trigger med schemat ovan, Teams-kort, SharePoint-rad, villkorsstyrt mejl med `base64ToBinary`).
-3. Fyll i `azuredeploy.parameters.json` med egna värden, inklusive din egen `flowUrl`.
-4. Kör kommandona under Kommandon.
+2. Förbered Microsoft 365 (en gång):
+   - Skapa teamet `Novatrix` med kanalen `Kundtjänst` i Teams (avsnitt 4).
+   - Skapa listan `Ärenderegister` med kolumnerna `Avsändare` och `Tidpunkt` på SharePoint-webbplatsen `Novatrix` (avsnitt 5).
+3. Bygg flödet i Power Automate, i den här ordningen:
+   1. Triggern **"När en HTTP-begäran tas emot"** med schemat i avsnitt 1 och "Vem kan utlösa flödet?" satt till **Vem som helst**.
+   2. Ett **Omfång** med Teams-steget (avsnitt 4) och därefter SharePoint-steget (avsnitt 5). SharePoint körs efter Teams med bara "Har lyckats" ibockat.
+   3. Efter Omfånget: villkoret på `bildNamn` med de två mejlvarianterna (avsnitt 6), körs när Omfånget lyckats.
+   4. Också efter Omfånget: larmmejlet "Larm: Fel i Novatrix", körs vid "Har misslyckats", "Hoppades över" och "Tidsgränsen har uppnåtts" (se "Om ett steg brister").
+   5. Spara, öppna triggern igen och kopiera **HTTP-URL**.
+4. Fyll i `azuredeploy.parameters.json` med egna värden: `adminIp`, `sshPublicKey` och HTTP-URL:en som `flowUrl`.
+5. Kör kommandona under Kommandon, öppna adressen från `webUrl` och skicka in ett testärende.
+6. Riv miljön när testet är klart.
 
-Azure-delen är fullt reproducerbar som kod. M365-flödet är kontobundet och måste byggas för hand i mottagarens eget konto - det går inte att committa ett Power Automate-flöde på samma sätt som en ARM-mall.
+Azure-delen är fullt reproducerbar som kod. M365-flödet är kontobundet och måste byggas för hand i mottagarens eget konto, det går inte att committa ett Power Automate-flöde på samma sätt som en ARM-mall.
