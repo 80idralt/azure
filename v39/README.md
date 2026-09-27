@@ -264,14 +264,13 @@ Flödets fullständiga struktur:
 2. Förbered Microsoft 365 (en gång):
    - Skapa teamet `Novatrix` med kanalen `Kundtjänst` i Teams (avsnitt 4).
    - Skapa listan `Ärenderegister` med kolumnerna `Avsändare` och `Tidpunkt` på SharePoint-webbplatsen `Novatrix` (avsnitt 5).
-3. Bygg flödet i Power Automate, i den här ordningen:
-   1. Triggern **"När en HTTP-begäran tas emot"** med schemat i avsnitt 1 och "Vem kan utlösa flödet?" satt till **Vem som helst**.
-   2. Ett **Omfång** med Teams-steget (avsnitt 4) och därefter SharePoint-steget (avsnitt 5). SharePoint körs efter Teams med bara "Har lyckats" ibockat.
-   3. Efter Omfånget: villkoret på `bildNamn` med de två mejlvarianterna (avsnitt 6), körs när Omfånget lyckats.
-   4. Också efter Omfånget: larmmejlet "Larm: Fel i Novatrix", körs vid "Har misslyckats", "Hoppades över" och "Tidsgränsen har uppnåtts" (se "Om ett steg brister").
-   5. Spara, öppna triggern igen och kopiera **HTTP-URL**.
-4. Fyll i `azuredeploy.parameters.json` med egna värden: `adminIp`, `sshPublicKey` och HTTP-URL:en som `flowUrl`.
-5. Kör kommandona under Kommandon, öppna adressen från `webUrl` och skicka in ett testärende.
-6. Riv miljön när testet är klart.
+3. Power Automate, flödets trigger: **"När en HTTP-begäran tas emot"** med schemat i avsnitt 1 och "Vem kan utlösa flödet?" satt till **Vem som helst**.
+4. Power Automate, ett **Omfång** med Teams-steget (avsnitt 4) och därefter SharePoint-steget (avsnitt 5). SharePoint körs efter Teams med bara "Har lyckats" ibockat.
+5. Power Automate, efter Omfånget: villkoret på `bildNamn` med de två mejlvarianterna (avsnitt 6), körs när Omfånget lyckats.
+6. Power Automate, också efter Omfånget: larmmejlet "Larm: Fel i Novatrix", körs vid "Har misslyckats", "Hoppades över" och "Tidsgränsen har uppnåtts" (se "Om ett steg brister").
+7. Spara flödet, öppna triggern igen och kopiera **HTTP-URL**.
+8. Fyll i `azuredeploy.parameters.json` med egna värden: `adminIp`, `sshPublicKey` och HTTP-URL:en som `flowUrl`.
+9. Kör kommandona under Kommandon, öppna adressen från `webUrl` och skicka in ett testärende.
+10. Riv miljön när testet är klart.
 
 Azure-delen är fullt reproducerbar som kod. M365-flödet är kontobundet och måste byggas för hand i mottagarens eget konto, det går inte att committa ett Power Automate-flöde på samma sätt som en ARM-mall.
