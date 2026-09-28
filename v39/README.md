@@ -10,7 +10,7 @@
 
 ## Syfte
 
-Novatrix kundtjänst har hittills bara sparat inskickade ärenden i en lagringscontainer (v37-v38), någon måste ändå gå in och leta i containern för att upptäcka att ett ärende kommit in. Veckans uppgift knyter ihop Azure-miljön med Microsoft 365, så att ett inskickat ärende automatiskt sätter kundtjänsten i rörelse: en post i SharePoints ärenderegister, en notis i Teams, och ett bekräftelsemejl i Outlook, allt utan att någon behöver leta manuellt. Kopplingen sköts av ett enda Power Automate-flöde.
+Novatrix kundtjänst har hittills bara sparat inskickade ärenden i en lagringscontainer (v37-v38), någon måste ändå gå in och leta i containern för att upptäcka att ett ärende kommit in. Veckans uppgift knyter ihop Azure-miljön med Microsoft 365, så att ett inskickat ärende automatiskt sätter kundtjänsten i rörelse: en post i SharePoints ärenderegister, en notis i Teams och ett bekräftelsemejl i Outlook, allt utan att någon behöver leta manuellt. Kopplingen sköts av ett enda Power Automate-flöde.
 
 ## Arkitektur
 
@@ -32,7 +32,7 @@ Blob-skrivningen och POST:en till flödet sker parallellt i appen, direkt efter 
 
 Power Automates blob-trigger bevakar ett specifikt lagringskonto. Vårt kontonamn byggs med `uniqueString(resourceGroup().id)` i ARM-mallen (se v38), så det blir ett nytt namn vid varje omdeploy, en blob-trigger hade behövt kopplas om för hand varje gång miljön rivs och byggs upp igen, vilket händer ofta under utveckling.
 
-HTTP-triggern löser det: den får en fast URL när flödet skapas en gång, och appen anropar den URL:en direkt efter varje sparat ärende. Kopplingen överlever hur många omdeployer som helst, så länge URL:en är känd av den som deployar.
+HTTP-triggern löser det: den får en fast URL när flödet skapas en gång och appen anropar den URL:en direkt efter varje sparat ärende. Kopplingen överlever hur många omdeployer som helst, så länge URL:en är känd av den som deployar.
 
 **Request Body JSON Schema** (fylls i i triggerns konfiguration, matchar exakt vad appen skickar):
 
@@ -51,7 +51,7 @@ HTTP-triggern löser det: den får en fast URL när flödet skapas en gång, och
 }
 ```
 
-"Vem kan utlösa flödet?" är satt till **Vem som helst**, annars kräver Microsoft Entra-autentisering för varje anrop, och appen har ingen inloggad användare att skicka en token för. Säkerheten ligger istället i att URL:en har en inbyggd signatur (`sig=`) som fungerar som ett lösenord.
+"Vem kan utlösa flödet?" är satt till **Vem som helst**, annars kräver Microsoft Entra-autentisering för varje anrop och appen har ingen inloggad användare att skicka en token för. Säkerheten ligger istället i att URL:en har en inbyggd signatur (`sig=`) som fungerar som ett lösenord.
 
 URL:en skapas först när flödet sparats en gång. Öppna då triggern igen och kopiera fältet **HTTP-URL**, det är värdet som ska in i parametern `flowUrl`.
 
@@ -59,7 +59,7 @@ URL:en skapas först när flödet sparats en gång. Öppna då triggern igen och
 
 URL:en fungerar som en hemlighet, signaturen i frågesträngen är själva säkerheten, vem som helst med URL:en kan utlösa flödet. Den ligger därför aldrig hårdkodad i koden. Den skickas in som ARM-parametern `flowUrl` och sätts som miljövariabeln `FLOW_URL` på webb-VM:en via cloud-init. I det committade repot är parametern tom (`""`), den som kör om miljön bygger sitt eget flöde och sätter sin egen URL lokalt, den committas aldrig.
 
-**Bugg på vägen:** URL:en innehåller `%`-tecken (`%2Ftriggers%2F...`), och systemd tolkar `%` som en specialkaraktär (specifier-expansion) i tjänstefiler. Första försöket tystade systemd ner hela `Environment=FLOW_URL=...`-raden helt utan felmeddelande, `systemctl show novatrix-form -p Environment` visade tre av fyra miljövariabler, `FLOW_URL` saknades spårlöst trots att rätt värde stod i själva tjänstefilen. Löst med `replace(parameters('flowUrl'), '%', '%%')` i mallen, så `%` dubbleras innan det skrivs in i unit-filen, systemd avkodar `%%` tillbaka till ett enda `%` när tjänsten faktiskt startar.
+**Bugg på vägen:** URL:en innehåller `%`-tecken (`%2Ftriggers%2F...`) och systemd tolkar `%` som en specialkaraktär (specifier-expansion) i tjänstefiler. Första försöket tystade systemd ner hela `Environment=FLOW_URL=...`-raden helt utan felmeddelande, `systemctl show novatrix-form -p Environment` visade tre av fyra miljövariabler, `FLOW_URL` saknades spårlöst trots att rätt värde stod i själva tjänstefilen. Löst med `replace(parameters('flowUrl'), '%', '%%')` i mallen, så `%` dubbleras innan det skrivs in i unit-filen, systemd avkodar `%%` tillbaka till ett enda `%` när tjänsten faktiskt startar.
 
 Utdrag ur `azuredeploy.json`:
 
@@ -147,7 +147,7 @@ Appen skickar `skapat` som `2026-09-24-175847`, vilket är svårläst. Uttrycket
 
 ## 6. Villkorsstyrd e-post med bildbilaga
 
-Lagringskontot är nätverkslåst (bara `adminIp`/privat endpoint kommer in, se v38 avsnitt 8), så Power Automate kan aldrig hämta bilden via en blob-länk, Microsofts molntjänst har helt enkelt ingen väg in. Istället skickas bildens bytes base64-kodade i samma POST som resten av ärendet (`bildData`), och sparas separat till blob av appen som vanligt för arkivering.
+Lagringskontot är nätverkslåst (bara `adminIp`/privat endpoint kommer in, se v38 avsnitt 8), så Power Automate kan aldrig hämta bilden via en blob-länk, Microsofts molntjänst har helt enkelt ingen väg in. Istället skickas bildens bytes base64-kodade i samma POST som resten av ärendet (`bildData`) och sparas separat till blob av appen som vanligt för arkivering.
 
 Ett villkor kollar `bildNamn` **är inte lika med** tomt:
 - **Sant:** Outlook "Skicka e-postmeddelande (V2)" med bilaga.
@@ -165,7 +165,7 @@ som avkodar texten till en riktig bildfil innan mejlet skickas.
 
 **Teams** ger kundtjänst ögonblicklig synlighet, någon ser ärendet inom sekunder, utan att aktivt leta. **SharePoint** är arkivet: till skillnad från en Teams-kanal, som rullar iväg i flödet av andra meddelanden, ligger ärenderegistret kvar sökbart och strukturerat så länge listan finns. **Outlook** är bekräftelsen till kunden, i kundens egen inkorg, oavsett om kunden själv använder Teams eller SharePoint.
 
-Ärenderegistret är dessutom fäst som en flik direkt i kanalen `Kundtjänst`. Då finns notisen (under Inlägg) och arkivet på samma ställe, och kundtjänst behöver inte öppna SharePoint separat:
+Ärenderegistret är dessutom fäst som en flik direkt i kanalen `Kundtjänst`. Då finns notisen (under Inlägg) och arkivet på samma ställe och kundtjänst behöver inte öppna SharePoint separat:
 
 ![Ärenderegistret som flik i Teams-kanalen Kundtjänst](images/teams-flik-arenderegister.png)
 
@@ -181,7 +181,7 @@ Teams och SharePoint ligger före villkoret eftersom de inte bryr sig om bilden,
 
 Teams-steget och SharePoint-steget ligger i ett gemensamt **Omfång** ("Scope"). Lyckas båda går flödet vidare till kundmejlet som vanligt. Brister något av dem larmar flödet istället: ett separat mejl går till Novatrix ("Larm: Fel i Novatrix"), konfigurerat att köra efter Omfånget med **"Har misslyckats", "Hoppades över"** och **"Tidsgränsen har uppnåtts"** ibockade, men **"Har lyckats" avbockad**, så larmet bara går vid faktiska problem.
 
-Inuti Omfånget kör SharePoint bara efter att Teams **lyckats** (inte vid alla utfall). Det är medvetet: om SharePoint ändå kört och lyckats trots att Teams brustit, hade Omfångets egen status kunnat visa "Lyckades" ändå (sista steget avgör), och larmet hade aldrig gått iväg. Genom att låta SharePoint stanna vid ett Teams-fel garanteras att Omfånget verkligen rapporterar "Misslyckades" så fort något internt går snett, pålitlig larmning prioriteras framför att pressa igenom så mycket som möjligt. Konsekvensen: vid ett internt fel uteblir både kundmejlet och ärenderegistret just den gången, bara larmet skickas. Ett medvetet, enklare val: antingen går allt igenom, eller så larmar vi, ingen halvfärdig mellanväg.
+Inuti Omfånget kör SharePoint bara efter att Teams **lyckats** (inte vid alla utfall). Det är medvetet: om SharePoint ändå kört och lyckats trots att Teams brustit, hade Omfångets egen status kunnat visa "Lyckades" ändå (sista steget avgör) och larmet hade aldrig gått iväg. Genom att låta SharePoint stanna vid ett Teams-fel garanteras att Omfånget verkligen rapporterar "Misslyckades" så fort något internt går snett, pålitlig larmning prioriteras framför att pressa igenom så mycket som möjligt. Konsekvensen: vid ett internt fel uteblir både kundmejlet och ärenderegistret just den gången, bara larmet skickas. Ett medvetet, enklare val: antingen går allt igenom, eller så larmar vi, ingen halvfärdig mellanväg.
 
 Samma grundtanke som `try/except` runt `notifiera_flode()` i appen (avsnitt 3): ett trasigt steg ska aldrig tystas ner utan att någon får veta.
 
