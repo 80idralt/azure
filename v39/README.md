@@ -6,7 +6,7 @@
 
 **Klass:** MOV25
 
-**Datum:** 2026-09-27
+**Datum:** 2026-09-28
 
 ## Syfte
 
@@ -164,6 +164,12 @@ som avkodar texten till en riktig bildfil innan mejlet skickas.
 ## Varför just dessa tjänster
 
 **Teams** ger kundtjänst ögonblicklig synlighet, någon ser ärendet inom sekunder, utan att aktivt leta. **SharePoint** är arkivet: till skillnad från en Teams-kanal, som rullar iväg i flödet av andra meddelanden, ligger ärenderegistret kvar sökbart och strukturerat så länge listan finns. **Outlook** är bekräftelsen till kunden, i kundens egen inkorg, oavsett om kunden själv använder Teams eller SharePoint.
+
+Ärenderegistret är dessutom fäst som en flik direkt i kanalen `Kundtjänst`. Då finns notisen (under Inlägg) och arkivet på samma ställe, och kundtjänst behöver inte öppna SharePoint separat:
+
+![Ärenderegistret som flik i Teams-kanalen Kundtjänst](images/teams-flik-arenderegister.png)
+
+Klockslagen i bilden (17:58 och 17:44) är två timmar fel. Appen stämplade ärenden i UTC i stället för svensk tid. Det är rättat i `app.py`, som nu använder `ZoneInfo("Europe/Stockholm")`.
 
 I den här testmiljön går mejlet till en fast testbrevlåda (`giremiramov@Altun1980.onmicrosoft.com`) i stället för till kundens adress, så att inga riktiga mejl skickas ut under utvecklingen. I skarpt läge sätts mottagaren (fältet **Till**) till `triggerBody()?['epost']`, alltså den adress kunden skrev i formuläret.
 
