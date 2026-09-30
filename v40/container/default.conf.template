@@ -1,0 +1,21 @@
+# nginx-konfiguration för Novatrix webbsida.
+#
+# nginx-imagen kör envsubst på alla filer i /etc/nginx/templates när
+# containern startar: ${FUNC_URL} ersätts med miljövariabeln FUNC_URL och
+# resultatet sparas som /etc/nginx/conf.d/default.conf.
+#
+# sub_filter byter sedan platshållaren __FUNC_URL__ i index.html mot den
+# riktiga adressen varje gång sidan skickas till en besökare. Funktionens
+# adress är alltså inte inbakad i imagen, samma image kan köras mot vilken
+# funktion som helst.
+
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+
+    location / {
+        index index.html;
+        sub_filter '__FUNC_URL__' '${FUNC_URL}';
+        sub_filter_once off;
+    }
+}

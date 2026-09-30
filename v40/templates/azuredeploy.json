@@ -1,0 +1,279 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "swedencentral",
+      "metadata": { "description": "Region för alla resurser." }
+    },
+    "pythonVersion": {
+      "type": "string",
+      "defaultValue": "3.12",
+      "allowedValues": [ "3.11", "3.12" ],
+      "metadata": { "description": "Python-version för funktionen." }
+    },
+    "imageTag": {
+      "type": "string",
+      "defaultValue": "1.2",
+      "metadata": { "description": "Taggen på imagen novatrix-web i registret." }
+    },
+    "deployContainer": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": { "description": "false = bygg allt utom containern (imagen finns inte än). true = skapa även containern." }
+    }
+  },
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id)]",
+
+    "hostStorageName": "[concat('stfunc', variables('suffix'))]",
+    "dataStorageName": "[concat('starende', variables('suffix'))]",
+    "workspaceName": "[concat('log-novatrix-', variables('suffix'))]",
+    "insightsName": "[concat('appi-novatrix-', variables('suffix'))]",
+    "planName": "[concat('plan-novatrix-', variables('suffix'))]",
+    "funcName": "[concat('func-novatrix-', variables('suffix'))]",
+    "acrName": "[concat('acrnovatrix', variables('suffix'))]",
+    "identityName": "id-novatrix-web",
+    "aciName": "novatrix-web",
+    "dnsLabel": "[concat('novatrix-', variables('suffix'))]",
+    "deployContainer": "app-package",
+
+    "hostStorageId": "[resourceId('Microsoft.Storage/storageAccounts', variables('hostStorageName'))]",
+    "dataStorageId": "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStorageName'))]",
+    "insightsId": "[resourceId('Microsoft.Insights/components', variables('insightsName'))]",
+    "funcId": "[resourceId('Microsoft.Web/sites', variables('funcName'))]",
+    "acrId": "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]",
+    "identityId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('identityName'))]",
+
+    "hostRoller": [
+      { "namn": "blobOwner", "id": "b7e6dc6d-f1e8-4753-8033-0f276bb0955b" },
+      { "namn": "queueContributor", "id": "974c5e8b-45b9-4653-ba55-5f855dd0fb88" },
+      { "namn": "tableContributor", "id": "0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3" }
+    ],
+    "blobContributorRoll": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
+    "acrPullRoll": "7f951dda-4ed3-4680-a7ca-43fe172d538d",
+    "acrPullName": "[guid(variables('acrId'), variables('identityId'), variables('acrPullRoll'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('hostStorageName')]",
+      "location": "[parameters('location')]",
+      "sku": { "name": "Standard_LRS" },
+      "kind": "StorageV2",
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false,
+        "supportsHttpsTrafficOnly": true
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(variables('hostStorageName'), '/default/', variables('deployContainer'))]",
+      "dependsOn": [ "[variables('hostStorageId')]" ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('dataStorageName')]",
+      "location": "[parameters('location')]",
+      "sku": { "name": "Standard_LRS" },
+      "kind": "StorageV2",
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false,
+        "supportsHttpsTrafficOnly": true
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(variables('dataStorageName'), '/default/arenden')]",
+      "dependsOn": [ "[variables('dataStorageId')]" ]
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('workspaceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": { "name": "PerGB2018" },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('insightsName')]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "dependsOn": [ "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]" ],
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2024-04-01",
+      "name": "[variables('planName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp",
+      "sku": { "name": "FC1", "tier": "FlexConsumption" },
+      "properties": { "reserved": true }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2024-04-01",
+      "name": "[variables('funcName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp,linux",
+      "identity": { "type": "SystemAssigned" },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+        "[variables('insightsId')]",
+        "[variables('hostStorageId')]",
+        "[variables('dataStorageId')]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+        "httpsOnly": true,
+        "siteConfig": {
+          "minTlsVersion": "1.2",
+          "appSettings": [
+            { "name": "AzureWebJobsStorage__accountName", "value": "[variables('hostStorageName')]" },
+            { "name": "APPLICATIONINSIGHTS_CONNECTION_STRING", "value": "[reference(variables('insightsId'), '2020-02-02').ConnectionString]" },
+            { "name": "STORAGE_ACCOUNT", "value": "[variables('dataStorageName')]" },
+            { "name": "CONTAINER", "value": "arenden" }
+          ]
+        },
+        "functionAppConfig": {
+          "deployment": {
+            "storage": {
+              "type": "blobContainer",
+              "value": "[concat(reference(variables('hostStorageId'), '2023-05-01').primaryEndpoints.blob, variables('deployContainer'))]",
+              "authentication": { "type": "SystemAssignedIdentity" }
+            }
+          },
+          "scaleAndConcurrency": {
+            "maximumInstanceCount": 40,
+            "instanceMemoryMB": 512
+          },
+          "runtime": {
+            "name": "python",
+            "version": "[parameters('pythonVersion')]"
+          }
+        }
+      }
+    },
+    {
+      "copy": { "name": "hostRolltilldelningar", "count": "[length(variables('hostRoller'))]" },
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(variables('hostStorageId'), variables('funcId'), variables('hostRoller')[copyIndex()].id)]",
+      "scope": "[concat('Microsoft.Storage/storageAccounts/', variables('hostStorageName'))]",
+      "dependsOn": [ "[variables('funcId')]" ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('hostRoller')[copyIndex()].id)]",
+        "principalId": "[reference(variables('funcId'), '2024-04-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(variables('dataStorageId'), variables('funcId'), variables('blobContributorRoll'))]",
+      "scope": "[concat('Microsoft.Storage/storageAccounts/', variables('dataStorageName'))]",
+      "dependsOn": [ "[variables('funcId')]" ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('blobContributorRoll'))]",
+        "principalId": "[reference(variables('funcId'), '2024-04-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.ContainerRegistry/registries",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('acrName')]",
+      "location": "[parameters('location')]",
+      "sku": { "name": "Basic" },
+      "properties": { "adminUserEnabled": false }
+    },
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('identityName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[variables('acrPullName')]",
+      "scope": "[concat('Microsoft.ContainerRegistry/registries/', variables('acrName'))]",
+      "dependsOn": [
+        "[variables('acrId')]",
+        "[variables('identityId')]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('acrPullRoll'))]",
+        "principalId": "[reference(variables('identityId'), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "condition": "[parameters('deployContainer')]",
+      "type": "Microsoft.ContainerInstance/containerGroups",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('aciName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": { "[variables('identityId')]": {} }
+      },
+      "dependsOn": [
+        "[variables('funcId')]",
+        "[extensionResourceId(variables('acrId'), 'Microsoft.Authorization/roleAssignments', variables('acrPullName'))]"
+      ],
+      "properties": {
+        "osType": "Linux",
+        "restartPolicy": "Always",
+        "imageRegistryCredentials": [
+          {
+            "server": "[reference(variables('acrId'), '2023-07-01').loginServer]",
+            "identity": "[variables('identityId')]"
+          }
+        ],
+        "containers": [
+          {
+            "name": "[variables('aciName')]",
+            "properties": {
+              "image": "[concat(reference(variables('acrId'), '2023-07-01').loginServer, '/novatrix-web:', parameters('imageTag'))]",
+              "ports": [ { "port": 80, "protocol": "TCP" } ],
+              "environmentVariables": [
+                { "name": "FUNC_URL", "value": "[concat('https://', reference(variables('funcId'), '2024-04-01').defaultHostName, '/api/submit')]" }
+              ],
+              "resources": {
+                "requests": { "cpu": 1, "memoryInGB": 0.5 }
+              }
+            }
+          }
+        ],
+        "ipAddress": {
+          "type": "Public",
+          "dnsNameLabel": "[variables('dnsLabel')]",
+          "ports": [ { "port": 80, "protocol": "TCP" } ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "funcName": { "type": "string", "value": "[variables('funcName')]" },
+    "funcUrl": { "type": "string", "value": "[concat('https://', reference(variables('funcId'), '2024-04-01').defaultHostName, '/api/submit')]" },
+    "acrName": { "type": "string", "value": "[variables('acrName')]" },
+    "dataStorageName": { "type": "string", "value": "[variables('dataStorageName')]" },
+    "webUrl": { "type": "string", "value": "[concat('http://', variables('dnsLabel'), '.', parameters('location'), '.azurecontainer.io')]" }
+  }
+}
