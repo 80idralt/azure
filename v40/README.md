@@ -267,7 +267,7 @@ Den första versionen byggdes för att fungera. När den väl gjorde det gick ja
 2. **Inget lösenord till registret.** Administratörskontot är avstängt. Containern har en egen hanterad identitet med rollen `AcrPull`, som bara får hämta images, inget annat. Samma princip som funktionens inloggning mot lagringen.
 3. **Funktionens driftlagring är skild från ärendena.** I första versionen låg funktionens egna filer (`azure-webjobs-*`, `app-package-*`) och kundernas ärenden (`arenden`) i samma konto. Nu är det två konton, så ärendekontot kan låsas hårdare utan att påverka funktionens drift.
 4. **Rätt storlek.** Containern fick 0,5 GB minne i stället för 1 GB, det räcker gott för att visa en statisk sida. Funktionen kör på lägsta minnesnivån, 512 MB.
-5. **Hela miljön byggs och rivs som en enhet**, från en ARM-mall. Inget ligger kvar och kostar av misstag.
+5. **Hela miljön byggs och rivs med ett kommando var**, `deploy.ps1` och `destroy.ps1`, med ARM-mallen i botten. Inget ligger kvar och kostar av misstag.
 
 **Nästa steg, inte genomfört:**
 
@@ -389,7 +389,15 @@ Det finns inget lösenord att hämta, gömma eller råka visa i en skärmdump. `
 | `stfunc…` | funktionens egna filer: koden (`app-package`), köer och tabeller för drift | funktionen: Blob Data Owner, Queue Data Contributor, Table Data Contributor |
 | `starende…` | kundernas ärenden (`arenden`) | funktionen: bara Blob Data Contributor |
 
-Funktionen loggar in mot båda med sin identitet. Driftkontot kräver fler rättigheter, eftersom Azure Functions själv behöver skriva där. Ärendekontot behöver bara det funktionskoden gör, att spara blobar. Om ärendekontot längre fram ska låsas helt för allmänt nätverk (optimering 7) påverkar det inte funktionens drift.
+Jämför med ett kontor. Där finns ett **förråd** med det personalen behöver för att allt ska fungera, och ett **kundarkiv** med kundernas brev och adresser. Man lägger inte kundarkivet i förrådet, inte för att förrådet är farligt, utan för att de två har olika värde och ska skyddas på olika sätt. `stfunc…` är förrådet: allt där kan återskapas från repot på några minuter. `starende…` är kundarkivet: namn, e-postadresser, meddelanden och bilder, alltså personuppgifter som aldrig kan återskapas om de försvinner.
+
+Tre skäl till uppdelningen:
+
+- **Funktionen får mindre makt över kunddatan.** För att Azure Functions ska kunna köra måste funktionen ha nästan full kontroll över sitt driftkonto (ägare över blobarna, köer, tabeller). Med ett enda konto hade den haft samma fulla kontroll över kundernas ärenden. Nu får den bara spara filer i ärendekontot. Minsta möjliga behörighet, samma tanke som identiteten `id-novatrix-app` i v35.
+- **Kundarkivet kan låsas utan att förrådet påverkas.** Om ärendekontot ska stängas för allmänt nätverk igen, som i v37-v39 (optimering 7), riskerar det inte att funktionen slutar starta för att den inte når sina egna filer.
+- **Olika livslängd.** Funktionen, containern och driftkontot rivs och byggs om ofta. Ärendena ska finnas kvar. Om Novatrix en dag flyttar mottagningen till en annan nivå kan driftkontot slängas medan ärendekontot står orört.
+
+Priset är en resurs till att hålla reda på. Kostnaden är i praktiken densamma, ett lagringskonto kostar för det som lagras och inte för att det finns. För ett testprojekt utan riktig kunddata hade ett konto räckt, och den första versionen fungerade också med ett. Men Novatrix hanterar kunders personuppgifter, och då väger säkerhetsskälen tyngre.
 
 ### Optimering 4: rätt storlek
 
@@ -401,6 +409,55 @@ Funktionen loggar in mot båda med sin identitet. Driftkontot kräver fler rätt
 
 nginx som visar en statisk sida använder en bråkdel av det. Funktionen kör på `"instanceMemoryMB": 512`, den lägsta nivån i Flex Consumption.
 
+### Optimering 5: ett kommando för att bygga, ett för att riva
+
+Mallen löser det mesta, men att bygga hela miljön krävde ändå tolv kommandon: skapa gruppen, första varvet, hämta namnen, ladda upp funktionen, bygga imagen, andra varvet och flera byten av mapp däremellan. Samma mönster som [`v37/scripts/deploy.ps1`](../v37/scripts/deploy.ps1) samlar dem nu i två skript:
+
+- [`deploy.ps1`](deploy.ps1) bygger allt och skriver till sist ut formulärets adress.
+- [`destroy.ps1`](destroy.ps1) river allt.
+
+Skriptet följer samma tre steg som i "Två varv genom samma mall", med en rad för varje:
+
+```powershell
+# --- 1. Bygga huset: allt utom containern
+az deployment group create --resource-group $rgName --template-file $mall --parameters "@$parametrar" --output none
+
+# --- 2. Flytta in möblerna: funktionens kod och containerns image
+func azure functionapp publish $out.funcName.value --python
+az acr build --registry $out.acrName.value --image "novatrix-web:$imageTag" $container
+
+# --- 3. Öppna dörren: samma mall igen, nu med containern
+az deployment group create ... deployContainer=true imageTag=$imageTag --output none
+```
+
+Tre saker gör skriptet smidigare än att skriva kommandona för hand:
+
+- **Inga mappbyten.** `$PSScriptRoot` är mappen där skriptet ligger, så skriptet hittar `templates`, `function` och `container` själv oavsett var det startas.
+- **Väntan på rollerna sköts automatiskt.** Rolltilldelningar i Azure tar ofta en eller ett par minuter att slå igenom. Direkt efter första varvet kan `func publish` därför få ett behörighetsfel. Skriptet försöker då igen, upp till fem gånger med en minut emellan:
+
+  ```powershell
+  for ($forsok = 1; $forsok -le 5; $forsok++) {
+      try {
+          func azure functionapp publish $out.funcName.value --python
+          break
+      }
+      catch {
+          if ($forsok -eq 5) { throw }
+          Write-Host "Rollerna har inte slagit igenom än, väntar 60 sekunder (försök $forsok av 5)..."
+          Start-Sleep -Seconds 60
+      }
+  }
+  ```
+
+- **Det stannar vid första felet.** Två rader högst upp gör att skriptet avbryts direkt om ett `az`-kommando misslyckas, i stället för att fortsätta bygga på något som inte finns:
+
+  ```powershell
+  $ErrorActionPreference = "Stop"
+  $PSNativeCommandUseErrorActionPreference = $true
+  ```
+
+Mallen, funktionskoden och Dockerfilen är desamma. Skriptet är bara de tolv kommandona sparade i rätt ordning, fortfarande text i repot och fortfarande infrastruktur som kod.
+
 ## Buggar på vägen
 
 - **`func azure functionapp publish` avbröt med "Can't determine project language from files".** Core Tools läser språket ur `local.settings.json`, som skapas av `func init`. Filerna här skapades för hand, så den filen fanns inte. Löst med flaggan `--python`. `local.settings.json` behövs bara för att köra funktionen lokalt och kan innehålla hemligheter, så den hålls utanför repot.
@@ -411,9 +468,23 @@ nginx som visar en statisk sida använder en bråkdel av det. Funktionen kör p�
 
 ## Kommandon
 
-### Optimerade versionen, från mallen
+### Optimerade versionen, med skripten
 
-Står i `v40/templates`. Första varvet, allt utom containern:
+Bygg hela miljön:
+
+```powershell
+.\v40\deploy.ps1
+```
+
+Riv hela miljön:
+
+```powershell
+.\v40\destroy.ps1
+```
+
+### Optimerade versionen, samma steg för hand
+
+Det här är exakt vad `deploy.ps1` gör, uppdelat så att varje steg går att köra och kontrollera ett i taget. Står i `v40/templates`. Första varvet, allt utom containern:
 
 ```powershell
 az group create --name rg-novatrix --location swedencentral
@@ -435,6 +506,8 @@ func azure functionapp publish $out.funcName.value --python
 cd ..\container
 az acr build --registry $out.acrName.value --image novatrix-web:1.2 .
 ```
+
+Om `func azure functionapp publish` stoppar med ett behörighetsfel har rolltilldelningarna inte hunnit slå igenom. Vänta ett par minuter och kör raden igen.
 
 Andra varvet, nu med containern:
 
@@ -615,13 +688,38 @@ arende-2026-09-30-170552-42c846/arende.json
 arende-2026-09-30-170552-42c846/nätversk.jpg
 ```
 
+Till sist revs gruppen en gång till och byggdes upp med bara `deploy.ps1`. Skriptet gick igenom alla tre stegen utan handpåläggning, skapade samma nio resurser och ett nytt testärende (`arende-2026-09-30-203330-81ac60`) hamnade i ärendekontot. Miljön revs sedan med `destroy.ps1`.
+
 ## Så återskapas miljön
 
-1. Klona repot och gå till `v40/templates`.
-2. Kör kommandona under "Optimerade versionen, från mallen", i ordning. Inga namn behöver bytas, mallen räknar fram unika namn själv.
-3. Om `func azure functionapp publish` stoppar med ett behörighetsfel har rolltilldelningarna inte hunnit slå igenom. Vänta ett par minuter och kör raden igen.
-4. Öppna adressen i `$out.webUrl.value`, skicka in ett testärende och kontrollera blob-listan.
-5. Riv miljön när testet är klart:
+**Det här behövs på datorn:**
+
+- Azure CLI, inloggad med `az login`
+- Azure Functions Core Tools v4 (`func`)
+- PowerShell 7.4 eller senare
+- Rollen **Owner** på prenumerationen (eller Contributor + User Access Administrator). Mallen skapar rolltilldelningar, och med bara Contributor stoppar deployen på just dem.
+
+Inga namn, parametrar eller hemligheter behöver fyllas i. Mallen räknar fram unika namn själv, och resursleverantörerna registreras automatiskt när mallen körs.
+
+**Så här:**
+
+1. Klona repot:
    ```powershell
-   az group delete --name rg-novatrix --yes
+   git clone https://github.com/80idralt/azure.git
+   cd azure
    ```
+2. Bygg miljön. Efter några minuter skrivs formulärets adress ut:
+   ```powershell
+   .\v40\deploy.ps1
+   ```
+   Om Windows svarar att skript inte får köras ("running scripts is disabled"), tillåt det en gång för din användare och kör skriptet igen:
+   ```powershell
+   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+   ```
+3. Öppna adressen, skicka in ett testärende med en bild.
+4. Riv miljön när testet är klart:
+   ```powershell
+   .\v40\destroy.ps1
+   ```
+
+Den som vill se varje steg för sig kan i stället köra kommandona under "Optimerade versionen, samma steg för hand".
