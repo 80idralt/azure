@@ -6,7 +6,7 @@
 
 **Klass:** MOV25
 
-**Datum:** 2026-10-01
+**Datum:** 2026-10-02
 
 ## Syfte
 
@@ -214,25 +214,66 @@ arende-2026-09-30-132030-238a8a/arende.json
 
 Svaret `200 OK` och filen i lagringen visar att funktionen tog emot och sparade ärendet. Svaret skickades 11:20 UTC och ärendet stämplades 13:20, alltså i svensk tid.
 
-Funktionen kör på Flex Consumption med 512 MB minne:
+Utskrifterna nedan är från en ny körning med `deploy.ps1` den 2026-10-02, därför har resurserna namn från mallen.
 
-![Function App på Flex Consumption](images/function-app-flex.png)
+Funktionen kör på Flex Consumption med Python 3.12, 512 MB minne och högst 40 kopior:
+
+```
+PS> az functionapp plan show --resource-group rg-novatrix --name plan-novatrix-nqoqjeswfh5g2 --query "{Plan:name, Sku:sku.name, Niva:sku.tier}" -o table
+Plan                         Sku    Niva
+---------------------------  -----  ---------------
+plan-novatrix-nqoqjeswfh5g2  FC1    FlexConsumption
+
+PS> az resource show --resource-group rg-novatrix --name func-novatrix-nqoqjeswfh5g2 --resource-type Microsoft.Web/sites --query "{Namn:name, Status:properties.state, Runtime:properties.functionAppConfig.runtime.name, Version:properties.functionAppConfig.runtime.version, MinneMB:properties.functionAppConfig.scaleAndConcurrency.instanceMemoryMB, MaxInstanser:properties.functionAppConfig.scaleAndConcurrency.maximumInstanceCount}" -o table
+Namn                         Status    Runtime    Version    MinneMB    MaxInstanser
+---------------------------  --------  ---------  ---------  ---------  --------------
+func-novatrix-nqoqjeswfh5g2  Running   python     3.12       512        40
+```
 
 Koden som Azure kör ligger som en zipfil i lagringen. Det är allt som lämnas in på serverless-nivån:
 
-![app-package med released-package.zip](images/app-package.png)
+```
+PS> az storage blob list --account-name stfuncnqoqjeswfh5g2 --container-name app-package --auth-mode key --query "[].{Fil:name, Byte:properties.contentLength}" -o table
+Fil                   Byte
+--------------------  --------
+kudu-state.json       2897
+released-package.zip  11326052
+```
 
 ### Containern
 
-Imagen byggdes i molnet på 13 sekunder och lades i registret med ett versionsnummer:
+Imagen byggdes i molnet på 13 sekunder och lades i registret med ett versionsnummer. Administratörskontot är avstängt, containern hämtar imagen med sin egen identitet:
 
-![az acr build](images/acr-build.png)
+```
+PS> az acr build --registry $out.acrName.value --image novatrix-web:1.2 .
+Run ID: dt2 was successful after 13s
 
-![Registret med novatrix-web](images/acr-repository.png)
+PS> az acr show --name acrnovatrixnqoqjeswfh5g2 --query "{Register:name, Niva:sku.name, Adminkonto:adminUserEnabled}" -o table
+Register                  Niva    Adminkonto
+------------------------  ------  ------------
+acrnovatrixnqoqjeswfh5g2  Basic   False
 
-ACI hämtade imagen och startade containern. Händelseloggen visar tre steg: imagen hämtas, hämtningen blir klar och containern startar. Allt tog cirka 13 sekunder:
+PS> az acr repository show-tags --name acrnovatrixnqoqjeswfh5g2 --repository novatrix-web -o table
+Result
+--------
+1.2
+```
 
-![Containerns händelser i ACI](images/aci-handelser.png)
+ACI hämtade imagen och startade containern med 1 CPU och 0,5 GB minne. Händelseloggen visar tre steg: imagen hämtas, hämtningen blir klar och containern startar. Allt tog cirka 16 sekunder:
+
+```
+PS> az container show --resource-group rg-novatrix --name novatrix-web --query "{Status:instanceView.state, Adress:ipAddress.fqdn, CPU:containers[0].resources.requests.cpu, MinneGB:containers[0].resources.requests.memoryInGb}" -o table
+Status    Adress                                                  CPU    MinneGB
+--------  ------------------------------------------------------  -----  ---------
+Running   novatrix-nqoqjeswfh5g2.swedencentral.azurecontainer.io  1.0    0.5
+
+PS> az container show --resource-group rg-novatrix --name novatrix-web --query "containers[0].instanceView.events[].{Tid:firstTimestamp, Handelse:message}" -o table
+Tid                        Handelse
+-------------------------  -------------------------------------------------------------------------------------
+2026-10-02T10:32:48+00:00  pulling image "acrnovatrixnqoqjeswfh5g2.azurecr.io/novatrix-web@sha256:eca1441e43..."
+2026-10-02T10:32:53+00:00  Successfully pulled image "acrnovatrixnqoqjeswfh5g2.azurecr.io/novatrix-web@sha256:eca1441e43..."
+2026-10-02T10:33:04+00:00  Started container
+```
 
 ### Hela kedjan i webbläsaren
 
@@ -246,7 +287,13 @@ Efter "Skicka ärende" svarar funktionen. Adressen slutar nu på `azurewebsites.
 
 Ärendet sparades med både `arende.json` och den bifogade bilden:
 
-![Ärendet med bilaga i lagringen](images/blob-arende-med-bild.png)
+```
+PS> az storage blob list --account-name starendenqoqjeswfh5g2 --container-name arenden --auth-mode key --query "[].name" -o table
+Result
+-------------------------------------------
+arende-2026-10-02-123747-c1b88c/arende.json
+arende-2026-10-02-123747-c1b88c/color.png
+```
 
 Funktionens körhistorik visar båda anropen, curl-testet och formuläret, båda med status `200`:
 
@@ -256,9 +303,22 @@ Båda körningarna tog knappt två sekunder (1956 och 1816 ms), fast koden bara 
 
 ![Application Insights](images/app-insights.png)
 
-Alla resurser i resursgruppen:
+Alla nio resurser i resursgruppen:
 
-![Resursgruppen](images/resursgrupp.png)
+```
+PS> az resource list --resource-group rg-novatrix --query "[].{Namn:name, Typ:type}" -o table
+Namn                         Typ
+---------------------------  ------------------------------------------------
+id-novatrix-web              Microsoft.ManagedIdentity/userAssignedIdentities
+acrnovatrixnqoqjeswfh5g2     Microsoft.ContainerRegistry/registries
+stfuncnqoqjeswfh5g2          Microsoft.Storage/storageAccounts
+starendenqoqjeswfh5g2        Microsoft.Storage/storageAccounts
+plan-novatrix-nqoqjeswfh5g2  Microsoft.Web/serverFarms
+log-novatrix-nqoqjeswfh5g2   Microsoft.OperationalInsights/workspaces
+appi-novatrix-nqoqjeswfh5g2  Microsoft.Insights/components
+func-novatrix-nqoqjeswfh5g2  Microsoft.Web/sites
+novatrix-web                 Microsoft.ContainerInstance/containerGroups
+```
 
 ### Byggd från ARM-mallen
 
