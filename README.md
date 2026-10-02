@@ -11,10 +11,9 @@ Varje veckomapp har en egen README som dokumenterar veckans arbete, med syfte, s
 - [x] [V35 - IAM och identitet](v35/); Användare, grupper och RBAC-roller på Novatrix resurser enligt least privilege
 - [x] [V36 - Nätverk och säkerhet](v36/)
 - [x] [V37 - Storage](v37/)
-- [ ] [V38 - IaC med ARM-templates](v38/)
-- [ ] [V39 - Automation och integration](v39/)
-- [ ] [V40 - Virtualiseringsnivåer](v40/)
-- [ ] [V41](v41/)
+- [x] [V38 - IaC med ARM-templates](v38/)
+- [x] [V39 - Automation och integration](v39/)
+- [x] [V40 - Virtualiseringsnivåer](v40/)
 
 ## Om Novatrix
 
