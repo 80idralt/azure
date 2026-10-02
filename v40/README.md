@@ -165,7 +165,7 @@ Priset är att jag har minst kontroll av alla nivåerna. Jag kan inte välja ope
 | **Drift** | Jag patchar, sköter tjänster, brandvägg och skalning | Jag bygger om imagen vid ändringar | Nästan ingen |
 | **Kostnad** | Fast, dygnet runt | Per sekund containern kör | Per anrop, noll vid ingen trafik |
 | **Skalning** | Manuellt, fler VM:ar och en lastbalanserare | Snabbt, fler kopior av samma image | Automatiskt, upp vid rusning och ner till noll |
-| **Start** | Minuter (v39) | Cirka 13 sekunder (ACI) | Direkt när den är varm, cirka 2 sekunder kall |
+| **Start** | Minuter (v39) | Cirka 16 sekunder (ACI) | Direkt när den är varm, cirka 2 sekunder kall |
 | **Flyttbarhet** | Låg | Hög, samma image överallt | Låg, koden är skriven för Azure Functions |
 
 Alla skillnaderna kommer ur samma sak, hur mycket gästen delar med värden. VM:en bär med sig ett helt operativsystem, med allt arbete och all kostnad det innebär. Containern delar kärnan och blir därför lätt. Funktionen delar allt utom koden.
@@ -399,7 +399,7 @@ Båda delarna hade tekniskt kunnat köras på båda nivåerna. Därför gick jag
 
 **Mottagningen som container?** Det hade varit enklast, eftersom `app.py` från v39 fungerar nästan som den är. Men då står en server och väntar och kostar dygnet runt för några ärenden om dagen. En container i ACI skalar dessutom inte själv vid en rusning.
 
-**Allt i en container?** Formuläret och `app.py` tillsammans hade varit en rimlig första flytt från VM:en. Det blir en sak att bygga och en adress. Men då skalar och kostar allt tillsammans. Ett fel i mottagningen kan också ta ner sidan. Uppdelat får varje del det dess nivå är bäst på.
+**Allt i en container?** Formuläret och `app.py` tillsammans hade varit en rimlig första flytt från VM:en. Det blir en sak att bygga och en adress. Men då skalar och kostar allt tillsammans. Ett fel i mottagningen kan också ta ner sidan. Uppdelat hamnar varje del på den nivå som passar den bäst.
 
 **Behålla VM:en?** Ingen av frågorna i guiden pekar mot en VM. Novatrix behöver inte full kontroll över operativsystemet och lasten är varken jämn eller tung. Då finns det ingen anledning att betala för en server dygnet runt och sköta patchningen själv.
 
