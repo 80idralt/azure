@@ -1,0 +1,226 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "swedencentral",
+      "metadata": { "description": "Region för lagringskonto, Function App och övervakning." }
+    },
+    "mejlTill": {
+      "type": "string",
+      "metadata": { "description": "Mottagare av notifieringsmejlet." }
+    },
+    "pythonVersion": {
+      "type": "string",
+      "defaultValue": "3.11",
+      "allowedValues": [ "3.10", "3.11", "3.12" ]
+    },
+    "teamsKanalId": {
+      "type": "string",
+      "metadata": { "description": "Id för Teams-kanalen som korten postas i (19:...@thread.tacv2)." }
+    },
+    "botResourceGroup": {
+      "type": "string",
+      "defaultValue": "rg-novatrix-bot",
+      "metadata": { "description": "Den permanenta resursgruppen där botens identitet ligger (byggs med bot.json)." }
+    }
+  },
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id)]",
+    "storageName": "[concat('st6b', variables('suffix'))]",
+    "planName": "[concat('plan-novatrix-6b-', variables('suffix'))]",
+    "funcName": "[concat('func-novatrix-6b-', variables('suffix'))]",
+    "workspaceName": "[concat('log-novatrix-6b-', variables('suffix'))]",
+    "insightsName": "[concat('appi-novatrix-6b-', variables('suffix'))]",
+    "systemTopicName": "[concat('evgt-novatrix-6b-', variables('suffix'))]",
+    "emailServiceName": "[concat('ecs-novatrix-6b-', variables('suffix'))]",
+    "acsName": "[concat('acs-novatrix-6b-', variables('suffix'))]",
+    "deployContainer": "app-package",
+    "storageId": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]",
+    "funcId": "[resourceId('Microsoft.Web/sites', variables('funcName'))]",
+    "emailDomainId": "[resourceId('Microsoft.Communication/emailServices/domains', variables('emailServiceName'), 'AzureManagedDomain')]",
+    "acsId": "[resourceId('Microsoft.Communication/communicationServices', variables('acsName'))]",
+    "botIdentityId": "[resourceId(parameters('botResourceGroup'), 'Microsoft.ManagedIdentity/userAssignedIdentities', 'id-novatrix-bot')]",    "roller": [
+      { "namn": "blobOwner", "id": "b7e6dc6d-f1e8-4753-8033-0f276bb0955b" },
+      { "namn": "queueContributor", "id": "974c5e8b-45b9-4653-ba55-5f855dd0fb88" },
+      { "namn": "tableContributor", "id": "0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3" }
+    ]
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('storageName')]",
+      "location": "[parameters('location')]",
+      "sku": { "name": "Standard_LRS" },
+      "kind": "StorageV2",
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false,
+        "supportsHttpsTrafficOnly": true
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(variables('storageName'), '/default/arenden')]",
+      "dependsOn": [ "[variables('storageId')]" ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(variables('storageName'), '/default/', variables('deployContainer'))]",
+      "dependsOn": [ "[variables('storageId')]" ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(variables('storageName'), '/default/arendelogg')]",
+      "dependsOn": [ "[variables('storageId')]" ]
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('workspaceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": { "name": "PerGB2018" },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('insightsName')]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "dependsOn": [ "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]" ],
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Communication/emailServices",
+      "apiVersion": "2023-04-01",
+      "name": "[variables('emailServiceName')]",
+      "location": "global",
+      "properties": { "dataLocation": "Europe" }
+    },
+    {
+      "type": "Microsoft.Communication/emailServices/domains",
+      "apiVersion": "2023-04-01",
+      "name": "[concat(variables('emailServiceName'), '/AzureManagedDomain')]",
+      "location": "global",
+      "dependsOn": [ "[resourceId('Microsoft.Communication/emailServices', variables('emailServiceName'))]" ],
+      "properties": {
+        "domainManagement": "AzureManaged",
+        "userEngagementTracking": "Disabled"
+      }
+    },
+    {
+      "type": "Microsoft.Communication/communicationServices",
+      "apiVersion": "2023-04-01",
+      "name": "[variables('acsName')]",
+      "location": "global",
+      "dependsOn": [ "[variables('emailDomainId')]" ],
+      "properties": {
+        "dataLocation": "Europe",
+        "linkedDomains": [ "[variables('emailDomainId')]" ]
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2024-04-01",
+      "name": "[variables('planName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp",
+      "sku": { "name": "FC1", "tier": "FlexConsumption" },
+      "properties": { "reserved": true }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2024-04-01",
+      "name": "[variables('funcName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "SystemAssigned, UserAssigned",
+        "userAssignedIdentities": { "[variables('botIdentityId')]": {} }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+        "[resourceId('Microsoft.Insights/components', variables('insightsName'))]",
+        "[variables('acsId')]",
+        "[variables('storageId')]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+        "httpsOnly": true,
+        "siteConfig": {
+          "minTlsVersion": "1.2",
+          "appSettings": [
+            { "name": "AzureWebJobsStorage__accountName", "value": "[variables('storageName')]" },
+            { "name": "NovatrixStorage__blobServiceUri", "value": "[reference(variables('storageId'), '2023-05-01').primaryEndpoints.blob]" },
+            { "name": "NovatrixStorage__queueServiceUri", "value": "[reference(variables('storageId'), '2023-05-01').primaryEndpoints.queue]" },
+            { "name": "TABLE_ENDPOINT", "value": "[reference(variables('storageId'), '2023-05-01').primaryEndpoints.table]" },
+            { "name": "APPLICATIONINSIGHTS_CONNECTION_STRING", "value": "[reference(resourceId('Microsoft.Insights/components', variables('insightsName')), '2020-02-02').ConnectionString]" },
+            { "name": "ACS_CONNECTION_STRING", "value": "[listKeys(variables('acsId'), '2023-04-01').primaryConnectionString]" },
+            { "name": "MEJL_FRAN", "value": "[concat('DoNotReply@', reference(variables('emailDomainId'), '2023-04-01').fromSenderDomain)]" },
+            { "name": "MEJL_TILL", "value": "[parameters('mejlTill')]" },
+            { "name": "BOT_CLIENT_ID", "value": "[reference(variables('botIdentityId'), '2023-01-31').clientId]" },
+            { "name": "TENANT_ID", "value": "[subscription().tenantId]" },
+            { "name": "TEAMS_KANAL_ID", "value": "[parameters('teamsKanalId')]" }
+          ]
+        },
+        "functionAppConfig": {
+          "deployment": {
+            "storage": {
+              "type": "blobContainer",
+              "value": "[concat(reference(variables('storageId'), '2023-05-01').primaryEndpoints.blob, variables('deployContainer'))]",
+              "authentication": { "type": "SystemAssignedIdentity" }
+            }
+          },
+          "scaleAndConcurrency": {
+            "maximumInstanceCount": 40,
+            "instanceMemoryMB": 512
+          },
+          "runtime": {
+            "name": "python",
+            "version": "[parameters('pythonVersion')]"
+          }
+        }
+      }
+    },
+    {
+      "copy": { "name": "rolltilldelningar", "count": "[length(variables('roller'))]" },
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(variables('storageId'), variables('funcId'), variables('roller')[copyIndex()].id)]",
+      "scope": "[concat('Microsoft.Storage/storageAccounts/', variables('storageName'))]",
+      "dependsOn": [ "[variables('funcId')]" ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roller')[copyIndex()].id)]",
+        "principalId": "[reference(variables('funcId'), '2024-04-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.EventGrid/systemTopics",
+      "apiVersion": "2022-06-15",
+      "name": "[variables('systemTopicName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [ "[variables('storageId')]" ],
+      "properties": {
+        "source": "[variables('storageId')]",
+        "topicType": "Microsoft.Storage.StorageAccounts"
+      }
+    }
+  ],
+  "outputs": {
+    "storageName": { "type": "string", "value": "[variables('storageName')]" },
+    "funcName": { "type": "string", "value": "[variables('funcName')]" },
+    "mejlFran": { "type": "string", "value": "[concat('DoNotReply@', reference(variables('emailDomainId'), '2023-04-01').fromSenderDomain)]" }
+  }
+}

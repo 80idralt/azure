@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "swedencentral",
+      "metadata": { "description": "Region för botens identitet. Själva boten är alltid global." }
+    },
+    "appResourceGroup": {
+      "type": "string",
+      "defaultValue": "rg-novatrix-6b",
+      "metadata": { "description": "Resursgruppen där funktionen byggs. Används för att räkna fram funktionens adress." }
+    }
+  },
+  "variables": {
+    "identityName": "id-novatrix-bot",
+    "botName": "[concat('bot-novatrix-', uniqueString(resourceGroup().id))]",
+    "identityId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('identityName'))]",
+    "appSuffix": "[uniqueString(concat(subscription().id, '/resourceGroups/', parameters('appResourceGroup')))]",
+    "endpoint": "[concat('https://func-novatrix-6b-', variables('appSuffix'), '.azurewebsites.net/api/messages')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('identityName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.BotService/botServices",
+      "apiVersion": "2022-09-15",
+      "name": "[variables('botName')]",
+      "location": "global",
+      "kind": "azurebot",
+      "sku": { "name": "F0" },
+      "dependsOn": [ "[variables('identityId')]" ],
+      "properties": {
+        "displayName": "Novatrix",
+        "endpoint": "[variables('endpoint')]",
+        "msaAppType": "UserAssignedMSI",
+        "msaAppId": "[reference(variables('identityId'), '2023-01-31').clientId]",
+        "msaAppTenantId": "[subscription().tenantId]",
+        "msaAppMSIResourceId": "[variables('identityId')]"
+      }
+    },
+    {
+      "type": "Microsoft.BotService/botServices/channels",
+      "apiVersion": "2022-09-15",
+      "name": "[concat(variables('botName'), '/MsTeamsChannel')]",
+      "location": "global",
+      "dependsOn": [ "[resourceId('Microsoft.BotService/botServices', variables('botName'))]" ],
+      "properties": {
+        "channelName": "MsTeamsChannel",
+        "properties": { "isEnabled": true }
+      }
+    }
+  ],
+  "outputs": {
+    "botClientId": { "type": "string", "value": "[reference(variables('identityId'), '2023-01-31').clientId]" },
+    "botIdentityId": { "type": "string", "value": "[variables('identityId')]" },
+    "endpoint": { "type": "string", "value": "[variables('endpoint')]" }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "value": "swedencentral" },
+    "mejlTill": { "value": "giremiramov@Altun1980.onmicrosoft.com" },
+    "teamsKanalId": { "value": "19:XhCHlzr3ibYD7YVGTP_2outk1b5skREwf9LKZEz7ChE1@thread.tacv2" }
+  }
+}

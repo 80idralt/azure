@@ -1,0 +1,42 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "17b224ad-8c17-4f6a-b0ae-426c4a7fd8a5",
+  "developer": {
+    "name": "Novatrix AB",
+    "websiteUrl": "https://github.com/80idralt/azure",
+    "privacyUrl": "https://github.com/80idralt/azure",
+    "termsOfUseUrl": "https://github.com/80idralt/azure"
+  },
+  "name": {
+    "short": "Novatrix",
+    "full": "Novatrix kundtjänstnotiser"
+  },
+  "description": {
+    "short": "Postar nya kundtjänstärenden i kanalen Kundtjänst.",
+    "full": "Notisbot för Novatrix. När ett nytt ärende kommer in postar en Azure Function ett kort med ärendets id, namn, e-post och meddelande i kanalen Kundtjänst. Boten tar inte emot meddelanden."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#2F5597",
+  "bots": [
+    {
+      "botId": "c98c45fe-35de-406b-a95a-4ab0d970afde",
+      "scopes": [
+        "team"
+      ],
+      "isNotificationOnly": true,
+      "supportsFiles": false,
+      "supportsCalling": false,
+      "supportsVideo": false
+    }
+  ],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "validDomains": []
+}

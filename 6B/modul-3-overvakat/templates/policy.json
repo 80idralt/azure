@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "taggNamn": {
+      "type": "string",
+      "defaultValue": "projekt",
+      "metadata": { "description": "Taggen som varje ny resurs i resursgruppen måste ha." }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Authorization/policyAssignments",
+      "apiVersion": "2022-06-01",
+      "name": "krav-tagg-novatrix",
+      "properties": {
+        "displayName": "Kräv taggen projekt på resurser i Novatrix testmiljö",
+        "description": "Nekar nya resurser som saknar taggen projekt, så att alla kostnader kan följas upp per projekt.",
+        "policyDefinitionId": "[tenantResourceId('Microsoft.Authorization/policyDefinitions', '871b6d14-10aa-478d-b590-94f262ecfa99')]",
+        "parameters": {
+          "tagName": { "value": "[parameters('taggNamn')]" }
+        },
+        "enforcementMode": "Default"
+      }
+    }
+  ]
+}

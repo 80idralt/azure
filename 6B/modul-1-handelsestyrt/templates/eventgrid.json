@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id)]",
+    "funcName": "[concat('func-novatrix-6b-', variables('suffix'))]",
+    "systemTopicName": "[concat('evgt-novatrix-6b-', variables('suffix'))]",
+    "hostKeysId": "[resourceId('Microsoft.Web/sites/host', variables('funcName'), 'default')]",
+    "funcId": "[resourceId('Microsoft.Web/sites', variables('funcName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.EventGrid/systemTopics/eventSubscriptions",
+      "apiVersion": "2022-06-15",
+      "name": "[concat(variables('systemTopicName'), '/arende-till-funktion')]",
+      "properties": {
+        "destination": {
+          "endpointType": "WebHook",
+          "properties": { "endpointUrl": "[concat('https://', reference(variables('funcId'), '2024-04-01').defaultHostName, '/runtime/webhooks/blobs?functionName=Host.Functions.NotifyOnTicket&code=', listKeys(variables('hostKeysId'), '2024-04-01').systemKeys.blobs_extension)]" }
+        },
+        "filter": {
+          "includedEventTypes": [ "Microsoft.Storage.BlobCreated" ],
+          "subjectBeginsWith": "/blobServices/default/containers/arenden/",
+          "subjectEndsWith": "/arende.json"
+        },
+        "eventDeliverySchema": "EventGridSchema"
+      }
+    }
+  ]
+}

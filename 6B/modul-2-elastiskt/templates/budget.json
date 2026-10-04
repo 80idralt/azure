@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "budgetName": {
+      "type": "string",
+      "defaultValue": "giremirabudget"
+    },
+    "amount": {
+      "type": "int",
+      "defaultValue": 100,
+      "metadata": { "description": "Belopp per månad i kontots valuta (SEK)." }
+    },
+    "startDate": {
+      "type": "string",
+      "metadata": { "description": "Första dagen i en månad, t.ex. 2026-09-01. Måste vara samma som den befintliga budgetens startdatum." }
+    },
+    "email": {
+      "type": "string",
+      "defaultValue": "idrisaltun@hotmail.com"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Consumption/budgets",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('budgetName')]",
+      "properties": {
+        "category": "Cost",
+        "amount": "[parameters('amount')]",
+        "timeGrain": "Monthly",
+        "timePeriod": { "startDate": "[parameters('startDate')]" },
+        "notifications": {
+          "forecasted_GreaterThan_50_Percent": {
+            "enabled": true,
+            "operator": "GreaterThan",
+            "threshold": 50,
+            "thresholdType": "Forecasted",
+            "contactEmails": [ "[parameters('email')]" ]
+          },
+          "forecasted_GreaterThan_70_Percent": {
+            "enabled": true,
+            "operator": "GreaterThan",
+            "threshold": 70,
+            "thresholdType": "Forecasted",
+            "contactEmails": [ "[parameters('email')]" ]
+          },
+          "forecasted_GreaterThan_90_Percent": {
+            "enabled": true,
+            "operator": "GreaterThan",
+            "threshold": 90,
+            "thresholdType": "Forecasted",
+            "contactEmails": [ "[parameters('email')]" ]
+          },
+          "actual_GreaterThan_80_Percent": {
+            "enabled": true,
+            "operator": "GreaterThan",
+            "threshold": 80,
+            "thresholdType": "Actual",
+            "contactEmails": [ "[parameters('email')]" ]
+          }
+        }
+      }
+    }
+  ]
+}
