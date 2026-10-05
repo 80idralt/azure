@@ -39,12 +39,35 @@ En vanlig virtuell maskin, eller en enskild container, är alltid en enda instan
 
 **Valet:** hela compute-delen körs som **Azure Functions i Flex Consumption-planen**, samma tjänst som i v40. Serverless löser både kraven på en gång utan extra arbete: Azure sprider automatiskt körningar över flera instanser, så det finns aldrig en enda instans att förlora, och kostnaden går mot noll när ingen använder portalen.
 
-Två funktionsappar, samma uppdelning som tidigare tänkt för nätverket:
+Två funktionsappar, båda i Flex Consumption-planen, Python 3.11, med ett gemensamt lagringskonto för sin egen drift (`stnordvik80idralt03`, separat från affärsdatan, se Storage):
 
-- `func-nordvik-portal` (publik) - visar inloggning och felanmälningsformuläret (rubrik, beskrivning, bild).
-- `func-nordvik-arenden` (bara nåbar inifrån nätverket) - tar emot anmälan, sparar den, och startar Power Automate-flödet.
+- `func-nordvik-portal` (publik) - visar inloggning och felanmälningsformuläret (rubrik, beskrivning, bild). Kopplad till `snet-app`.
+- `func-nordvik-arenden` (bara nåbar inifrån nätverket) - tar emot anmälan, sparar den, och startar Power Automate-flödet. Kopplad till `snet-func`.
 
-*Byggs i nästa steg, uppdateras när klart.*
+```
+$vnetId = az network vnet show --resource-group rg-nordvik --name vnet-nordvik --query id -o tsv
+
+az functionapp create --resource-group rg-nordvik --name func-nordvik-arenden --storage-account stnordvik80idralt03 --flexconsumption-location swedencentral --runtime python --runtime-version 3.11 --vnet $vnetId --subnet snet-func --tags avdelning=fastighetsforvaltning kostnadsstalle=nordvik-portal
+
+az functionapp create --resource-group rg-nordvik --name func-nordvik-portal --storage-account stnordvik80idralt03 --flexconsumption-location swedencentral --runtime python --runtime-version 3.11 --vnet $vnetId --subnet snet-app --tags avdelning=fastighetsforvaltning kostnadsstalle=nordvik-portal
+```
+
+VNet-kopplingen styr bara utgående trafik (vägen till lagringen), inte vem som får ringa in. `func-nordvik-arenden` stängs därför separat för publik åtkomst, så bara `func-nordvik-portal` kan nå den:
+
+```
+az functionapp config access-restriction add --resource-group rg-nordvik --name func-nordvik-arenden --rule-name allow-portal --priority 100 --action Allow --vnet-name vnet-nordvik --subnet snet-app
+```
+
+`func-nordvik-portal` har `vnetRouteAllEnabled: true`, så all dess utgående trafik, inklusive anrop till `func-nordvik-arenden`, går via `snet-app`. Regeln släpper bara in trafik därifrån, allt annat nekas automatiskt så fort en regel finns:
+
+```
+[
+  { "action": "Allow", "name": "allow-portal", "priority": 100, "vnetSubnetResourceId": ".../subnets/snet-app" },
+  { "action": "Deny", "name": "Deny all", "priority": 2147483647, "ipAddress": "Any" }
+]
+```
+
+*Kod, inloggning (Easy Auth) och koppling mot lagringen (hanterad identitet, RBAC) byggs i nästa steg.*
 
 ## Delmoment 2: IAM
 
