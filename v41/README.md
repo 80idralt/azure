@@ -114,18 +114,24 @@ Result
 fa-20261005-091910-9b9388/anmalan.json
 ```
 
-*Inloggning (Easy Auth) och `func-nordvik-portal` byggs i nästa steg.*
+### Koden i `func-nordvik-portal`
+
+Koden ligger i [`portal/function_app.py`](portal/function_app.py). Tre rutter: `/` visar felanmälningsformuläret, `/skicka` tar emot det och skickar vidare server-till-server till `func-nordvik-arenden` (webbläsaren pratar aldrig direkt med den interna funktionen), `/mina-arenden` låter en hyresgäst skriva in sitt hyresgästnummer och se sina egna anmälningar. Inget inloggningssystem byggdes — kursen har aldrig byggt inloggning i en egen webbapp, så precis som Novatrix formulär är det här öppet, med hyresgästnumret som ett vanligt fält, inte en hemlighet. Design med eget mörkt tema, medvetet skild från Novatrix formulär.
+
+Förvaltare och ekonomi loggar inte in i appen alls, de arbetar istället i SharePoint-listan (se Delmoment 6), där deras Entra-grupper styr vad de får göra.
 
 ## Delmoment 2: IAM
 
 Tre roller, enligt least privilege:
 
 - **Hyresgäst:** ingen egen Entra-identitet. Loggar in i appen med ett hyresgästnummer (mot en egen liten lista, inte Entra ID), hyresgästnumret bär med sig vilken fastighet/lägenhet personen hör till. Appen visar bara den inloggade hyresgästens egna anmälningar. En skarp lösning med 5500 externa hyresgäster hade använt Entra External ID/B2C, men det är inget kursen gått igenom, så det är en medveten avgränsning.
-- **Förvaltare** och **Ekonomi:** riktiga Entra-identiteter. Varje roll representeras av **två grupper** med varsitt syfte, inte en enda grupp som gör allt:
-  - `Nordvik-Forvaltare` / `Nordvik-Ekonomi` — **Microsoft 365-grupper**, skapade för att få en Teams-kanal (notiser) och en mejladress (det akuta mejlet) på köpet.
-  - `sg-nordvik-forvaltare` / `sg-nordvik-ekonomi` — vanliga **säkerhetsgrupper**, används för RBAC mot lagringen och för inloggningen i portalen.
+- **Förvaltare** och **Ekonomi:** riktiga Entra-identiteter, men bara förvaltare har en egen Microsoft 365-grupp/Team:
+  - `Nordvik-Forvaltare` — **Microsoft 365-grupp**, ger en Teams-kanal (notiser) och en mejladress (det akuta mejlet).
+  - `sg-nordvik-forvaltare` / `sg-nordvik-ekonomi` — vanliga **säkerhetsgrupper**, används för RBAC mot lagringen.
 
-  Planen var från början en enda grupp som gjorde allt tre. Det stötte på en verklig begränsning: Azure tillåter bara säkerhetsaktiverade grupper i RBAC-rolltilldelningar, och en Microsoft 365-grupp är det inte som standard (`(GroupTypeNotSupported) Only security-enabled groups can be used in role assignments`). Att göra en grupp till både Microsoft 365-grupp och säkerhetsaktiverad på samma gång går bara via direkta Microsoft Graph-anrop, långt utanför kursens verktyg, så lösningen blev två grupper per roll istället för en.
+  Planen var från början en enda grupp per roll som gjorde allt (RBAC + Teams + mejl). Det stötte på en verklig begränsning: Azure tillåter bara säkerhetsaktiverade grupper i RBAC-rolltilldelningar, och en Microsoft 365-grupp är det inte som standard (`(GroupTypeNotSupported) Only security-enabled groups can be used in role assignments`). Lösningen blev separata säkerhetsgrupper för RBAC.
+
+  En andra omtanke: `Nordvik-Ekonomi` byggdes först som ett eget Microsoft 365-team, symmetriskt med förvaltarnas, men det var överbyggt. Uppgiften ber bara om läsande insyn för ekonomi, aldrig om en egen Teams-kanal eller mejladress. Ett eget Team per roll är dessutom ovanligt i verkliga organisationer, där en avdelning normalt delar ett Team och skiljer åtkomst med behörigheter istället. `Nordvik-Ekonomi`-teamet revs (`Remove-Team`), och ekonomi får istället läsbehörighet direkt på `Nordvik-Forvaltare`s SharePoint-sajt (Visitors-gruppen), på samma lista som förvaltarna redigerar. `sg-nordvik-ekonomi` (säkerhetsgruppen för RBAC mot lagringen) påverkas inte av detta.
 
 Microsoft 365-grupperna, skapade med PowerShell-modulen MicrosoftTeams:
 
@@ -143,10 +149,9 @@ az ad group create --display-name "sg-nordvik-ekonomi" --mail-nickname "sgnordvi
 
 | Grupp | Syfte | ID |
 |---|---|---|
-| `Nordvik-Forvaltare` | Teams + mejl | `82f89c0e-2ccd-4a4b-a273-b633e2cd2805` |
-| `Nordvik-Ekonomi` | Teams + mejl | `292b7363-2955-43ae-859f-fd2ad29d0605` |
-| `sg-nordvik-forvaltare` | RBAC + inloggning | `836c0262-c307-4b2d-91fe-5c89dfb6c286` |
-| `sg-nordvik-ekonomi` | RBAC + inloggning | `b11988a3-db82-4ca7-ab72-b0a960f1d752` |
+| `Nordvik-Forvaltare` | SharePoint-sajt + mejladress (`Nordvik-Ekonomi` revs, se Delmoment 6) | `82f89c0e-2ccd-4a4b-a273-b633e2cd2805` |
+| `sg-nordvik-forvaltare` | RBAC mot lagringen, Members på SharePoint-sajten | `836c0262-c307-4b2d-91fe-5c89dfb6c286` |
+| `sg-nordvik-ekonomi` | RBAC mot lagringen, Visitors (läsbehörighet) på SharePoint-sajten | `b11988a3-db82-4ca7-ab72-b0a960f1d752` |
 
 RBAC-rolltilldelningarna, scopade till `anmalningar`-containern, inte hela kontot:
 
@@ -184,6 +189,32 @@ PS> az role assignment list --assignee <test-ekonomi-id> --include-groups --all 
 Principal           Role                      Scope
 sg-nordvik-ekonomi  Storage Blob Data Reader  .../containers/anmalningar
 ```
+
+## Delmoment 6: Automation och integration
+
+En inskickad felanmälan ska ge en post i en lista och en notis till förvaltaren, i Teams eller Outlook (uppgiften kräver bara en av dem). Valet föll på **Outlook**, det håller Power Automate-flödet enklare än att även koppla in Teams.
+
+### SharePoint-listan
+
+Listan `Felanmalningar` skapades på `Nordvik-Forvaltare`s SharePoint-sajt (Teams → Nordvik-Forvaltare → Shared → Open in SharePoint → Site contents → New → List), med samma datamodell som anmälan sparas med i lagringen:
+
+| Kolumn | Typ |
+|---|---|
+| Rubrik (Title) | Enkel textrad |
+| Beskrivning | Flera textrader |
+| Kategori | Val: varme, vatten, las, ovrigt |
+| Fastighet | Enkel textrad |
+| Hyresgast | Enkel textrad |
+| Bildlank | Hyperlänk |
+| Status | Val: ny, pagaende, klar |
+| Akut | Ja/Nej |
+| Tidpunkt | Enkel textrad |
+
+Behörigheterna är satta via sajtens tre standardgrupper (Owners/Members/Visitors): `sg-nordvik-forvaltare` är redan med genom teamets eget medlemskap (Edit), och `sg-nordvik-ekonomi` lades till i **Nordvik-Forvaltare Visitors**-gruppen (Read) under Site permissions → Advanced permissions settings. Samma lista, två behörighetsnivåer, ingen dubblett av datan.
+
+### Power Automate-flödet
+
+*Byggs i nästa steg: HTTP-trigger från `func-nordvik-arenden` → SharePoint-rad i `Felanmalningar` → Outlook-mejl till `Nordvik-Forvaltare`s gruppadress → om akut, ytterligare ett mejl märkt brådskande.*
 
 ## Delmoment 3: Nätverk och säkerhet
 
