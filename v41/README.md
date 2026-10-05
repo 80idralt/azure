@@ -210,7 +210,14 @@ Listan `Felanmalningar` skapades på `Nordvik-Forvaltare`s SharePoint-sajt (Team
 | Akut | Ja/Nej |
 | Tidpunkt | Enkel textrad |
 
-Behörigheterna är satta via sajtens tre standardgrupper (Owners/Members/Visitors): `sg-nordvik-forvaltare` är redan med genom teamets eget medlemskap (Edit), och `sg-nordvik-ekonomi` lades till i **Nordvik-Forvaltare Visitors**-gruppen (Read) under Site permissions → Advanced permissions settings. Samma lista, två behörighetsnivåer, ingen dubblett av datan.
+Behörigheterna är satta via sajtens tre standardgrupper (Owners/Members/Visitors), samma mönster för båda rollerna: en säkerhetsgrupp direkt in i rätt SharePoint-grupp.
+
+- `sg-nordvik-forvaltare` → **Nordvik-Forvaltare Members** (Edit)
+- `sg-nordvik-ekonomi` → **Nordvik-Forvaltare Visitors** (Read)
+
+(Members-gruppen innehåller sen tidigare även en automatisk länk till själva Teamet/M365-gruppen, det är normalt för Team-kopplade sajter och stör inte den extra säkerhetsgruppen.)
+
+Samma lista, två behörighetsnivåer, ingen dubblett av datan. Hyresgäster har ingen åtkomst till sajten alls, de interagerar bara med portalen.
 
 ### Power Automate-flödet
 
