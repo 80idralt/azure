@@ -70,3 +70,31 @@ Lifecycle-policyn som sköter flytten till Cool ligger som kod i [`storage/lifec
 ```
 az storage account management-policy create --account-name stnordvik80idralt02 --resource-group rg-nordvik --policy @v41/storage/lifecycle-policy.json
 ```
+
+## Delmoment 3: Nätverk och säkerhet
+
+Lagringen ska inte vara publikt åtkomlig. Lösningen är ett virtuellt nätverk med en **privat endpoint**, en egen ingång till lagringskontot som bara syns inifrån nätverket, i kombination med en **privat DNS-zon** som gör att kontots namn slår upp till en privat adress istället för en publik, bara för den som frågar inifrån vnet:et.
+
+```
+az network vnet create --name vnet-nordvik --resource-group rg-nordvik --location swedencentral --address-prefix 10.0.0.0/16 --subnet-name snet-data --subnet-prefix 10.0.1.0/24 --tags avdelning=fastighetsforvaltning kostnadsstalle=nordvik-portal
+
+az network private-dns zone create --resource-group rg-nordvik --name privatelink.blob.core.windows.net
+
+az network private-dns link vnet create --resource-group rg-nordvik --zone-name privatelink.blob.core.windows.net --name link-nordvik --virtual-network vnet-nordvik --registration-enabled false
+
+$storageId = az storage account show --name stnordvik80idralt02 --resource-group rg-nordvik --query id -o tsv
+
+az network private-endpoint create --name pe-nordvik-storage --resource-group rg-nordvik --vnet-name vnet-nordvik --subnet snet-data --private-connection-resource-id $storageId --group-id blob --connection-name pe-nordvik-storage-koppling
+
+az network private-endpoint dns-zone-group create --resource-group rg-nordvik --endpoint-name pe-nordvik-storage --name default --private-dns-zone privatelink.blob.core.windows.net --zone-name blob
+
+az storage account update --name stnordvik80idralt02 --resource-group rg-nordvik --default-action Deny
+```
+
+Sista kommandot stänger den sista öppningen. Lagringskontots nätverksregel gick från `Allow` till `Deny`, så allt som inte kommer via den privata endpointen avvisas. DNS-zongruppen skapade automatiskt rätt post:
+
+```
+stnordvik80idralt02.privatelink.blob.core.windows.net -> 10.0.1.4
+```
+
+**Om NSG:** `snet-data` har NSG-regler avstängda för privata endpoints som standard i Azure (`privateEndpointNetworkPolicies: Disabled`), så en NSG där skulle inte filtrera något på riktigt. NSG:n i den här lösningen läggs istället på subnätet för Container App-miljön och Function i compute-delen, med samma princip som i v36: en regel som uttrycker exakt det subnätets jobb.
