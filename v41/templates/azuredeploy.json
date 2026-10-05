@@ -82,6 +82,9 @@
             "name": "[variables('subnetApp')]",
             "properties": {
               "addressPrefix": "10.0.2.0/27",
+              "serviceEndpoints": [
+                { "service": "Microsoft.Web" }
+              ],
               "delegations": [
                 {
                   "name": "nordvik-app-delegation",
@@ -349,6 +352,16 @@
       }
     },
     {
+      "type": "Microsoft.Web/sites/networkConfig",
+      "apiVersion": "2023-12-01",
+      "name": "[concat(variables('arendenFuncName'), '/virtualNetwork')]",
+      "dependsOn": ["[resourceId('Microsoft.Web/sites', variables('arendenFuncName'))]"],
+      "properties": {
+        "subnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetFunc'))]",
+        "swiftSupported": true
+      }
+    },
+    {
       "type": "Microsoft.Web/sites",
       "apiVersion": "2024-04-01",
       "name": "[variables('portalFuncName')]",
@@ -366,6 +379,15 @@
       "properties": {
         "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('portalPlanName'))]",
         "virtualNetworkSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetApp'))]",
+        "vnetRouteAllEnabled": true,
+        "outboundVnetRouting": {
+          "allTraffic": false,
+          "applicationTraffic": true,
+          "backupRestoreTraffic": false,
+          "contentShareTraffic": false,
+          "imagePullTraffic": false,
+          "managedIdentityTraffic": false
+        },
         "functionAppConfig": {
           "deployment": {
             "storage": {
@@ -395,6 +417,16 @@
             { "name": "ARENDEN_URL", "value": "[concat('https://', reference(resourceId('Microsoft.Web/sites', variables('arendenFuncName'))).defaultHostName, '/api/arenden')]" }
           ]
         }
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/networkConfig",
+      "apiVersion": "2023-12-01",
+      "name": "[concat(variables('portalFuncName'), '/virtualNetwork')]",
+      "dependsOn": ["[resourceId('Microsoft.Web/sites', variables('portalFuncName'))]"],
+      "properties": {
+        "subnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetApp'))]",
+        "swiftSupported": true
       }
     },
     {

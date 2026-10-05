@@ -23,7 +23,7 @@ Allt för examinationen ligger i mappen `v41`. Strukturen byggs upp delmoment f�
 - [x] Delmoment 2: IAM - roller för hyresgäst, förvaltare, ekonomi
 - [x] Delmoment 3: Nätverk och säkerhet - defense in depth
 - [x] Delmoment 4: Storage - säker lagring för anmälningar och bilder
-- [ ] Delmoment 5: IaC - ARM-templates, versionshanterat
+- [x] Delmoment 5: IaC - ARM-templates, versionshanterat
 - [x] Delmoment 6: Automation och integration - Power Automate mot SharePoint/Outlook
 - [ ] Delmoment 7: Dokumentation - hur lösningen planerats, implementerats och kan återskapas
 
@@ -264,6 +264,10 @@ fa-20261005-115457-2ae8aa/anmalan.json
 
 Hela kedjan bevisad på fyra oberoende sätt: portalens bekräftelsesida → SharePoint-listan → mejlen → lagringen direkt.
 
+### Flödet som kod
+
+Power Automate-flöden kan inte beskrivas i en ARM-mall, men definitionen exporterades ändå som en egen fil och lades in i repot, så flödets logik går att läsa och återskapa utan att klicka sig igenom Power Automate på nytt: [`automation/nordvik-felanmalan-flow.json`](automation/nordvik-felanmalan-flow.json).
+
 ## Delmoment 3: Nätverk och säkerhet
 
 Lagringen ska inte vara publikt åtkomlig. Lösningen är ett virtuellt nätverk med en **privat endpoint**, en egen ingång till lagringskontot som bara syns inifrån nätverket, i kombination med en **privat DNS-zon** som gör att kontots namn slår upp till en privat adress istället för en publik, bara för den som frågar inifrån vnet:et.
@@ -366,4 +370,29 @@ Power Automate-flödets URL innehåller en inbyggd signatur, i praktiken en nyck
 
 ### Byggd från mallen, riktig rivning och återuppbyggnad
 
-*Verifieras i nästa steg: hela `rg-nordvik` rivs och byggs upp på nytt helt och hållet från mallen, för att bevisa att den faktiskt fungerar, inte bara att den är syntaktiskt giltig.*
+Hela `rg-nordvik` revs (`destroy.ps1`) och byggdes upp på nytt helt och hållet från mallen (`deploy.ps1`), för att bevisa att den faktiskt fungerar, inte bara att den är syntaktiskt giltig. Namnen blev nya (`func-nordvik-arenden-u622wnde7uy7i` osv, se Namngivning-avsnittet ovan), precis som väntat av `uniqueString()`.
+
+### Buggar på vägen
+
+VNet-integration för Flex Consumption-funktioner visade sig vara betydligt sämre dokumenterat än resten av mallen, och flera saker som Azure CLI satte upp automatiskt åt oss (när vi byggde för hand) visade sig kräva uttrycklig kod i ARM. Fyra separata fel i tur och ordning, varje löst genom att jämföra mot den riktiga JSON:en från den handbyggda versionen eller genom att slå upp Azures egen dokumentation, inte genom att gissa:
+
+1. **`vnetRouteAllEnabled` på fel JSON-nivå.** Lades först inuti `siteConfig`, men den egenskapen hör hemma direkt på resursens `properties`, som syskon till `siteConfig`. Fel nivå gav inget felmeddelande, bara ingen effekt.
+2. **`virtualNetworkSubnetId` satte sig inte alls**, trots att det är precis den egenskap Microsofts egen dokumentation visar för Flex Consumption. Lösningen var att lägga till en separat resurs, `Microsoft.Web/sites/networkConfig` (namngiven `.../virtualNetwork`), samma mekanism `az functionapp vnet-integration add` använder under huven. Verifierat med `az functionapp vnet-integration list`, inte `az functionapp show` (som visade `null` även när kopplingen faktiskt fanns).
+3. **Fel typ av routningsflagga.** Flex Consumption har bytt den enkla booleanen `vnetRouteAllEnabled` mot ett mer detaljerat objekt, `outboundVnetRouting`, med separata flaggor för applikationstrafik, backup, image pull osv. Det var `outboundVnetRouting.applicationTraffic: true` som faktiskt behövdes, inte den gamla booleanen (som ligger kvar men verkar vara en overksam kompatibilitetsrest för den här apptypen).
+4. **Käll-subnätet saknade en Service Endpoint.** En subnät-baserad åtkomstregel (`vnetSubnetResourceId` i `ipSecurityRestrictions`) kräver att källsubnätet (`snet-app`) har tjänstslutpunkten `Microsoft.Web` aktiverad, annars känner mottagarfunktionen inte igen trafiken som kommande därifrån. Det är precis den sortens detalj CLI:t löser tyst åt en.
+
+Varje fel syntes som samma sak utåt: `403 Forbidden` när portalen försökte vidarebefordra en anmälan till den interna funktionen, trots att nätverksbegränsningen och VNet-kopplingen såg rätt ut i mallens kod. Felsökningen gjordes genom att verifiera varje lager för sig direkt mot den riktiga, deployade resursen (`az resource show`, `az functionapp vnet-integration list`) istället för att lita på hur det såg ut i mallen.
+
+### Verifierat efter återbygget
+
+Samma testflöde som tidigare, kört på nytt mot de omdöpta resurserna efter att alla fyra fel var rättade:
+
+![Bekräftelse efter återbygget](images/arm-rebuild-skickad.png)
+
+Nya raden hamnade bredvid den gamla i SharePoint-listan, som aldrig påverkades av Azure-rivningen:
+
+![SharePoint efter återbygget](images/arm-rebuild-sharepoint.png)
+
+Och mejlet kom fram:
+
+![Mejl efter återbygget](images/arm-rebuild-mejl.png)

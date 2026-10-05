@@ -1,0 +1,166 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_sharepointonline": {
+        "api": {
+          "name": "shared_sharepointonline"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "new_sharedsharepointonline_f49f4"
+        },
+        "runtimeSource": "embedded"
+      },
+      "shared_office365": {
+        "api": {
+          "name": "shared_office365"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "new_sharedoffice365_4fd6c"
+        },
+        "runtimeSource": "embedded"
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "undefined",
+      "triggers": {
+        "manual": {
+          "type": "Request",
+          "kind": "Http",
+          "inputs": {
+            "triggerAuthenticationType": "All",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "rubrik": {
+                  "type": "string"
+                },
+                "beskrivning": {
+                  "type": "string"
+                },
+                "kategori": {
+                  "type": "string"
+                },
+                "akut": {
+                  "type": "boolean"
+                },
+                "fastighet": {
+                  "type": "string"
+                },
+                "hyresgast": {
+                  "type": "string"
+                },
+                "tidpunkt": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        },
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        }
+      },
+      "actions": {
+        "Skapa_objekt": {
+          "type": "OpenApiConnection",
+          "inputs": {
+            "parameters": {
+              "dataset": "https://altun1980.sharepoint.com/sites/nordvik-forvaltare",
+              "table": "3c698964-2ee2-4e02-832f-9d02ac594a53",
+              "item/Title": "@triggerBody()?['rubrik']",
+              "item/Beskrivning": "@triggerBody()?['beskrivning']",
+              "item/Kategori/Value": "@triggerBody()?['kategori']",
+              "item/Fastighet": "@triggerBody()?['fastighet']",
+              "item/Hyresgast": "@triggerBody()?['hyresgast']",
+              "item/Status/Value": "@triggerBody()?['status']",
+              "item/Akut": "@triggerBody()?['akut']",
+              "item/Tidpunkt": "@triggerBody()?['tidpunkt']"
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+              "operationId": "PostItem",
+              "connectionName": "shared_sharepointonline"
+            }
+          },
+          "runAfter": {}
+        },
+        "Skicka_e-postmeddelande_(V2)": {
+          "type": "OpenApiConnection",
+          "inputs": {
+            "parameters": {
+              "emailMessage/To": "nordvik-forvaltare@Altun1980.onmicrosoft.com",
+              "emailMessage/Subject": "Ny felanmälan: @{triggerBody()?['rubrik']}",
+              "emailMessage/Body": "<p class=\"editor-paragraph\">Fastighet: @{triggerBody()?['fastighet']}</p><p class=\"editor-paragraph\">Hyresgäst: @{triggerBody()?['hyresgast']}</p><p class=\"editor-paragraph\">Kategori: @{triggerBody()?['kategori']}</p><p class=\"editor-paragraph\">Tidpunkt: @{triggerBody()?['tidpunkt']}</p><br><p class=\"editor-paragraph\">Beskrivning: @{triggerBody()?['beskrivning']}</p>",
+              "emailMessage/Importance": "Normal"
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+              "operationId": "SendEmailV2",
+              "connectionName": "shared_office365"
+            }
+          },
+          "runAfter": {
+            "Skapa_objekt": [
+              "SUCCEEDED"
+            ]
+          }
+        },
+        "Villkor": {
+          "type": "If",
+          "expression": {
+            "and": [
+              {
+                "equals": [
+                  "@triggerBody()?['akut']",
+                  true
+                ]
+              }
+            ]
+          },
+          "actions": {
+            "Skicka_e-postmeddelande_om_akut": {
+              "type": "OpenApiConnection",
+              "inputs": {
+                "parameters": {
+                  "emailMessage/To": "nordvik-forvaltare@Altun1980.onmicrosoft.com",
+                  "emailMessage/Subject": "AKUT FELANMÄLAN: @{triggerBody()?['rubrik']}",
+                  "emailMessage/Body": "<p class=\"editor-paragraph\">Fastighet: @{triggerBody()?['fastighet']}</p><p class=\"editor-paragraph\">Hyresgäst: @{triggerBody()?['hyresgast']}</p><p class=\"editor-paragraph\">Kategori: @{triggerBody()?['kategori']}</p><p class=\"editor-paragraph\">Tidpunkt: @{triggerBody()?['tidpunkt']}</p><br><p class=\"editor-paragraph\">Beskrivning@{triggerBody()?['beskrivning']}</p>",
+                  "emailMessage/Importance": "High"
+                },
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+                  "operationId": "SendEmailV2",
+                  "connectionName": "shared_office365"
+                }
+              }
+            }
+          },
+          "else": {
+            "actions": {}
+          },
+          "runAfter": {
+            "Skicka_e-postmeddelande_(V2)": [
+              "SUCCEEDED"
+            ]
+          }
+        }
+      }
+    },
+    "templateName": null
+  },
+  "schemaVersion": "1.0.0.0"
+}
