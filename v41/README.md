@@ -10,7 +10,7 @@
 
 ## Syfte
 
-Nordvik Fastigheter AB förvaltar bostäder och lokaler och vill lansera en hyresgästportal i molnet. Kärnan i portalen är en felanmälan: en hyresgäst fyller i rubrik, beskrivning och en bild på felet och skickar in den. Förvaltare tar emot och hanterar anmälningarna, ekonomi har läsande insyn. Portalen ska driftsättas säkert och med kontrollerad åtkomst, med lagring för dokument och bilder provisionerad som kod, och med ett automatiserat arbetsflöde mot Nordviks Microsoft 365.
+Nordvik Fastigheter AB förvaltar bostäder och lokaler och vill lansera en hyresgästportal i molnet. Kärnan i portalen är en felanmälan: en hyresgäst fyller i rubrik, beskrivning och en bild på felet och skickar in den. Förvaltare tar emot och hanterar anmälningarna, ekonomi har läsande insyn. Portalen ska driftsättas säkert och med kontrollerad åtkomst, med lagring för dokument och bilder provisionerad som kod och med ett automatiserat arbetsflöde mot Nordviks Microsoft 365.
 
 Samma Azure-tekniker som använts genom kursen återanvänds som mönster, men datamodellen, rollerna och lösningen är medvetet designade utifrån Nordviks egna behov.
 
@@ -104,7 +104,7 @@ Nordviks krav pekar alla åt samma håll:
 - **Inte betala för stillastående kapacitet.** Nordvik betalar bara när någon faktiskt använder portalen.
 - **Lite drift.** Ingen behöver patcha operativsystem, det gör Azure.
 
-**Bortvalt:** En VM hade krävt minst två maskiner och en lastbalanserare för att tåla att en faller bort, och hade kostat pengar dygnet runt. En container löser mer av det, men kräver fortfarande att man själv bygger och underhåller avbilder och sätter upp skalning. För en portal som i grunden tar emot ett formulär och sparar det är serverless den enklaste och billigaste lösningen som uppfyller alla krav.
+**Bortvalt:** En VM hade krävt minst två maskiner och en lastbalanserare för att tåla att en faller bort och hade kostat pengar dygnet runt. En container löser mer av det, men kräver fortfarande att man själv bygger och underhåller avbilder och sätter upp skalning. För en portal som i grunden tar emot ett formulär och sparar det är serverless den enklaste och billigaste lösningen som uppfyller alla krav.
 
 ## Namngivning
 
@@ -193,7 +193,7 @@ fa-20261005-091910-9b9388/anmalan.json
 
 ### Koden i `func-nordvik-portal`
 
-Koden ligger i [`portal/function_app.py`](portal/function_app.py). Tre rutter: `/` visar felanmälningsformuläret, `/skicka` tar emot det och skickar vidare server-till-server till `func-nordvik-arenden`, och `/mina-arenden` låter en hyresgäst skriva in sitt hyresgästnummer och se sina anmälningar. Inget inloggningssystem byggdes, se Delmoment 2.
+Koden ligger i [`portal/function_app.py`](portal/function_app.py). Tre rutter: `/` visar felanmälningsformuläret, `/skicka` tar emot det och skickar vidare server-till-server till `func-nordvik-arenden` och `/mina-arenden` låter en hyresgäst skriva in sitt hyresgästnummer och se sina anmälningar. Inget inloggningssystem byggdes, se Delmoment 2.
 
 En hyresgäst som skriver in sitt hyresgästnummer ser sina anmälningar, med AKUT-märkning synlig. Sidan läser direkt från lagringen via den privata endpointen, så den bevisar också att nätverket och NSG:n släpper igenom rätt trafik:
 
@@ -203,7 +203,7 @@ En hyresgäst som skriver in sitt hyresgästnummer ser sina anmälningar, med AK
 
 Tre roller, enligt least privilege:
 
-- **Hyresgäst:** ingen egen Entra-identitet och ingen inloggning. Formuläret är öppet och hyresgästnumret är ett vanligt fält, inte en hemlighet. "Mina anmälningar" filtrerar på det nummer som skrivs in, utan att kontrollera vem som skriver. En skarp lösning med 5500 externa hyresgäster hade använt Entra External ID, men det ingår inte i kursen, så det är en medveten avgränsning. Hyresgästen har aldrig någon direkt åtkomst till lagringen, bara portalens egen hanterade identitet har det, och bara läsrätt.
+- **Hyresgäst:** ingen egen Entra-identitet och ingen inloggning. Formuläret är öppet och hyresgästnumret är ett vanligt fält, inte en hemlighet. "Mina anmälningar" filtrerar på det nummer som skrivs in, utan att kontrollera vem som skriver. En skarp lösning med 5500 externa hyresgäster hade använt Entra External ID, men det ingår inte i kursen, så det är en medveten avgränsning. Hyresgästen har aldrig någon direkt åtkomst till lagringen, bara portalens egen hanterade identitet har det och bara med läsrätt.
 - **Förvaltare:** redigerar anmälningar i SharePoint och får mejlen. Skrivrätt till `anmalningar`-containern via RBAC.
 - **Ekonomi:** läser anmälningar i SharePoint. Bara läsrätt till `anmalningar`-containern via RBAC.
 
@@ -215,7 +215,7 @@ Tre roller, enligt least privilege:
 | `sg-nordvik-forvaltare` | Säkerhetsgrupp | RBAC mot lagringen, Members (redigera) på SharePoint-sajten | `836c0262-c307-4b2d-91fe-5c89dfb6c286` |
 | `sg-nordvik-ekonomi` | Säkerhetsgrupp | RBAC mot lagringen, Visitors (läsa) på SharePoint-sajten | `b11988a3-db82-4ca7-ab72-b0a960f1d752` |
 
-Planen var från början en grupp per roll som gjorde allt. Det stötte på en verklig begränsning: Azure tillåter bara säkerhetsaktiverade grupper i RBAC, och en Microsoft 365-grupp är inte det som standard (`(GroupTypeNotSupported) Only security-enabled groups can be used in role assignments`). Därför finns separata säkerhetsgrupper för behörigheterna.
+Planen var från början en grupp per roll som gjorde allt. Det stötte på en verklig begränsning: Azure tillåter bara säkerhetsaktiverade grupper i RBAC. En Microsoft 365-grupp är inte det som standard (`(GroupTypeNotSupported) Only security-enabled groups can be used in role assignments`). Därför finns separata säkerhetsgrupper för behörigheterna.
 
 Ekonomi har ingen egen Microsoft 365-grupp. Uppgiften ber bara om läsande insyn, inte om en egen kanal eller mejladress, så ekonomi får istället läsbehörighet på förvaltarnas SharePoint-sajt.
 
@@ -271,7 +271,7 @@ Inloggad i SharePoint ser `Test Forvaltare` fullt verktygsfält (Nytt, Redigera,
 
 ![Förvaltare har redigeringsrätt](images/sharepoint-forvaltare-edit.png)
 
-`Test Ekonomi` ser samma lista, men utan Nytt/Redigera/Ta bort, och varje rad har en överkorsad penna:
+`Test Ekonomi` ser samma lista, men utan Nytt/Redigera/Ta bort. Varje rad har en överkorsad penna:
 
 ![Ekonomi är skrivskyddad](images/sharepoint-ekonomi-readonly.png)
 
@@ -340,7 +340,7 @@ snet-func  .../networkSecurityGroups/nsg-nordvik-func  Disabled
 
 | Lager | Skydd |
 |---|---|
-| Ingång | Bara `func-nordvik-portal` är publik, och den visar bara ett formulär |
+| Ingång | Bara `func-nordvik-portal` är publik och den visar bara ett formulär |
 | Intern funktion | `func-nordvik-arenden` släpper bara in trafik från `snet-app` |
 | Nätverk | NSG på varje subnät, lagringens subnät släpper bara in 443 från de två compute-subnäten |
 | Lagring | Ingen publik adress, brandvägg `Deny`, publik blobåtkomst avstängd, TLS 1.2 |
@@ -373,13 +373,13 @@ Lifecycle-policyn ligger som kod i [`storage/lifecycle-policy.json`](storage/lif
 az storage account management-policy create --account-name stnordvik80idralt02 --resource-group rg-nordvik --policy @v41/storage/lifecycle-policy.json
 ```
 
-Funktionernas egen drift (kodpaket, loggar) ligger i ett **separat** lagringskonto. Affärsdatan kan då låsas hårt utan att funktionernas drift påverkas, och funktionerna kan rivas och byggas om medan anmälningarna ligger kvar.
+Funktionernas egen drift (kodpaket, loggar) ligger i ett **separat** lagringskonto. Affärsdatan kan då låsas hårt utan att funktionernas drift påverkas. Funktionerna kan också rivas och byggas om medan anmälningarna ligger kvar.
 
 ## Delmoment 5: IaC
 
 Allt i Azure beskrivs som kod i [`templates/azuredeploy.json`](templates/azuredeploy.json), ren ARM-JSON, med parametrar i [`templates/azuredeploy.parameters.json`](templates/azuredeploy.parameters.json).
 
-### Vad som är med, och vad som inte är det
+### Vad som är med och vad som inte är det
 
 **Med:** VNet med de tre subnäten och deras NSG:er, båda lagringskontona med containrar och lifecycle-policy, den privata DNS-zonen och endpointen, Application Insights, de två funktionsapparna (VNet-integrerade, med nätverksbegränsningen på `func-nordvik-arenden`) och de fyra RBAC-rolltilldelningarna.
 
@@ -399,7 +399,7 @@ Namn som måste vara globalt unika får ett suffix från `uniqueString(resourceG
 
 ### En hemlighet som aldrig får hamna i repot
 
-Power Automate-flödets URL innehåller en inbyggd signatur, i praktiken en nyckel till flödet. Repot är publikt, så den får aldrig committas. `flowUrl` är `securestring` i mallen, och `azuredeploy.parameters.json` innehåller bara en platshållare. [`deploy.ps1`](deploy.ps1) frågar efter den riktiga URL:en vid varje körning och skriver den till en tillfällig parameterfil som tas bort direkt efter driftsättningen. Att skicka den direkt på kommandoraden fungerar inte, eftersom `&`-tecknen i adressen tolkas som kommandoavskiljare.
+Power Automate-flödets URL innehåller en inbyggd signatur, i praktiken en nyckel till flödet. Repot är publikt, så den får aldrig committas. `flowUrl` är `securestring` i mallen. `azuredeploy.parameters.json` innehåller bara en platshållare. [`deploy.ps1`](deploy.ps1) frågar efter den riktiga URL:en vid varje körning och skriver den till en tillfällig parameterfil som tas bort direkt efter driftsättningen. Att skicka den direkt på kommandoraden fungerar inte, eftersom `&`-tecknen i adressen tolkas som kommandoavskiljare.
 
 ### Skripten
 
@@ -486,7 +486,7 @@ Raden i SharePoint:
 
 ![Rad i Felanmalningar](images/sharepoint-lista.png)
 
-Det vanliga mejlet, och det akuta med hög prioritet och bilden bifogad:
+Det vanliga mejlet och det akuta med hög prioritet och bilden bifogad:
 
 ![Vanligt mejl](images/mejl-vanligt.png)
 ![Akut mejl, hög prioritet, med bilden bifogad](images/mejl-akut.png)
