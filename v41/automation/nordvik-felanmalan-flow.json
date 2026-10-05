@@ -42,101 +42,38 @@
             "schema": {
               "type": "object",
               "properties": {
-                "type": {
+                "id": {
                   "type": "string"
                 },
-                "properties": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "rubrik": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "beskrivning": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "kategori": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "akut": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "fastighet": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "hyresgast": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "tidpunkt": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "status": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "bild": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "bilagor": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
+                "rubrik": {
+                  "type": "string"
+                },
+                "beskrivning": {
+                  "type": "string"
+                },
+                "kategori": {
+                  "type": "string"
+                },
+                "akut": {
+                  "type": "boolean"
+                },
+                "fastighet": {
+                  "type": "string"
+                },
+                "hyresgast": {
+                  "type": "string"
+                },
+                "tidpunkt": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "bild": {
+                  "type": "string"
+                },
+                "bilagor": {
+                  "type": "array"
                 }
               }
             }
@@ -186,7 +123,7 @@
           },
           "runAfter": {
             "Välj": [
-              "SUCCEEDED"
+              "Succeeded"
             ]
           }
         },
