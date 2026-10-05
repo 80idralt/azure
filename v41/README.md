@@ -248,7 +248,17 @@ Flödets egen körningshistorik bekräftar samma sak, en lyckad körning på 3 s
 
 ![Körningshistorik i Power Automate](images/flode-korningshistorik.png)
 
-Hela kedjan bevisad: portal → intern funktion → lagring → Power Automate → SharePoint + två mejl.
+Oberoende bevis direkt mot lagringen också, samma tillfälliga-undantag-metod som tidigare:
+
+```
+PS> az storage blob list --account-name stnordvik80idralt02 --container-name anmalningar --auth-mode key --query "[].name" -o table
+Result
+--------------------------------------
+fa-20261005-091910-9b9388/anmalan.json
+fa-20261005-115457-2ae8aa/anmalan.json
+```
+
+Hela kedjan bevisad på fyra oberoende sätt: portalens bekräftelsesida → SharePoint-listan → mejlen → lagringen direkt.
 
 ## Delmoment 3: Nätverk och säkerhet
 
