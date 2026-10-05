@@ -120,6 +120,10 @@ Koden ligger i [`portal/function_app.py`](portal/function_app.py). Tre rutter: `
 
 Förvaltare och ekonomi loggar inte in i appen alls, de arbetar istället i SharePoint-listan (se Delmoment 6), där deras Entra-grupper styr vad de får göra.
 
+**Mina anmälningar, testat:** en hyresgäst som skriver in sitt hyresgästnummer ser bara sina egna anmälningar, med AKUT-märkning synlig:
+
+![Mina anmälningar, filtrerat på hyresgästnummer](images/mina-anmalningar.png)
+
 ## Delmoment 2: IAM
 
 Tre roller, enligt least privilege:

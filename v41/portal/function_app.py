@@ -12,7 +12,7 @@ SIDHUVUD = """<!DOCTYPE html>
 <html lang="sv">
 <head>
 <meta charset="utf-8">
-<title>Nordvik Fastigheter - Felanmalan</title>
+<title>Nordvik Fastigheter - Felanmälan</title>
 <style>
   body { font-family: Verdana, sans-serif; background: #1f2e35; color: #e8edf0; margin: 0; }
   header { background: #16222a; padding: 1.2rem 2rem; border-bottom: 3px solid #4fa89b; }
@@ -28,8 +28,8 @@ SIDHUVUD = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <h1>Nordvik Fastigheter &ndash; Hyresgastportal</h1>
-  <nav><a href="/">Ny felanmalan</a><a href="/mina-arenden">Mina anmalningar</a></nav>
+  <h1>Nordvik Fastigheter &ndash; Hyresgästportal</h1>
+  <nav><a href="/">Ny felanmälan</a><a href="/mina-arenden">Mina anmälningar</a></nav>
 </header>
 <main>
 """
@@ -39,26 +39,26 @@ SIDFOT = "</main></body></html>"
 @app.route(route="/", methods=["GET"])
 def formular(req: func.HttpRequest) -> func.HttpResponse:
     html = SIDHUVUD + """
-<h2>Ny felanmalan</h2>
+<h2>Ny felanmälan</h2>
 <form action="/skicka" method="post" enctype="multipart/form-data">
-  <label>Hyresgastnummer</label>
+  <label>Hyresgästnummer</label>
   <input type="text" name="hyresgast" required>
-  <label>Fastighet/lagenhet</label>
+  <label>Fastighet/lägenhet</label>
   <input type="text" name="fastighet" required>
   <label>Rubrik</label>
   <input type="text" name="rubrik" required>
   <label>Kategori</label>
   <select name="kategori">
-    <option value="ovrigt">Ovrigt</option>
-    <option value="varme">Varme</option>
+    <option value="ovrigt">Övrigt</option>
+    <option value="varme">Värme</option>
     <option value="vatten">Vatten</option>
-    <option value="las">Las</option>
+    <option value="las">Lås</option>
   </select>
   <label>Beskrivning</label>
   <textarea name="beskrivning" rows="4" required></textarea>
   <label>Bild (frivilligt)</label>
   <input type="file" name="bild" accept="image/*">
-  <button type="submit">Skicka anmalan</button>
+  <button type="submit">Skicka anmälan</button>
 </form>
 """ + SIDFOT
     return func.HttpResponse(html, mimetype="text/html")
@@ -85,7 +85,7 @@ def skicka(req: func.HttpRequest) -> func.HttpResponse:
         svar = requests.post(arenden_url, data=data, files=files, timeout=20)
     except requests.RequestException:
         return func.HttpResponse(
-            SIDHUVUD + "<h2>Kunde inte skicka anmalan just nu</h2><p>Forsok igen om en liten stund.</p>" + SIDFOT,
+            SIDHUVUD + "<h2>Kunde inte skicka anmälan just nu</h2><p>Försök igen om en liten stund.</p>" + SIDFOT,
             mimetype="text/html",
             status_code=502,
         )
@@ -98,9 +98,9 @@ def mina_arenden(req: func.HttpRequest) -> func.HttpResponse:
     hyresgast = req.params.get("hyresgast", "").strip()
 
     sok_formular = """
-<h2>Mina anmalningar</h2>
+<h2>Mina anmälningar</h2>
 <form method="get">
-  <label>Ange ditt hyresgastnummer</label>
+  <label>Ange ditt hyresgästnummer</label>
   <input type="text" name="hyresgast" value="%s" required>
   <button type="submit">Visa</button>
 </form>
@@ -138,6 +138,6 @@ def mina_arenden(req: func.HttpRequest) -> func.HttpResponse:
                 f'<small>{a["fastighet"]} &middot; {a["tidpunkt"]} &middot; status: {a["status"]}</small></div>'
             )
     else:
-        rader = "<p>Inga anmalningar hittades for det hyresgastnumret.</p>"
+        rader = "<p>Inga anmälningar hittades för det hyresgästnumret.</p>"
 
     return func.HttpResponse(SIDHUVUD + sok_formular + rader + SIDFOT, mimetype="text/html")
