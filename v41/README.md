@@ -27,35 +27,35 @@ Samma Azure-tekniker som använts genom kursen återanvänds som mönster, men d
 
 ## Översikt
 
-```
-                    Internet
-                       │  HTTPS
-                       ▼
-          ┌─────────────────────────┐
-          │  func-nordvik-portal    │  publik, visar formuläret
-          │  (Azure Functions)      │  och "Mina anmälningar"
-          └────────────┬────────────┘
-                       │  VNet-integration (snet-app)
-┌──────────────────────┼─────────────── vnet-nordvik ────────────────┐
-│                      ▼                                              │
-│        ┌─────────────────────────┐                                  │
-│        │  func-nordvik-arenden   │  tar bara emot trafik från       │
-│        │  (Azure Functions)      │  snet-app, nekar allt annat      │
-│        └────────────┬────────────┘                                  │
-│                     │  VNet-integration (snet-func)                 │
-│                     ▼                                               │
-│        ┌─────────────────────────┐                                  │
-│        │  privat endpoint        │  snet-data, NSG släpper bara     │
-│        │  → lagringskontot       │  in 443 från snet-app/snet-func  │
-│        └─────────────────────────┘                                  │
-└─────────────────────────────────────────────────────────────────────┘
-                       │
-                       │  func-nordvik-arenden postar anmälan + bild
-                       ▼
-          ┌─────────────────────────┐
-          │  Power Automate         │──► SharePoint-listan Felanmalningar
-          │  Nordvik-felanmalan     │──► Outlook: mejl till förvaltarna,
-          └─────────────────────────┘    extra mejl med hög prioritet vid akut fel
+```mermaid
+flowchart TD
+    H["Hyresgäst<br/>(webbläsare)"] -->|HTTPS| P
+
+    subgraph AZ["rg-nordvik (Azure)"]
+        P["func-nordvik-portal<br/>publik: formulär och Mina anmälningar"]
+        subgraph VN["vnet-nordvik"]
+            SA["snet-app<br/>NSG: neka inkommande"]
+            SF["snet-func<br/>NSG: neka inkommande"]
+            SD["snet-data<br/>NSG: bara 443 från snet-app/snet-func"]
+        end
+        A["func-nordvik-arenden<br/>intern: släpper bara in snet-app"]
+        PE["Privat endpoint"]
+        ST[("Lagringskonto<br/>anmalningar + dokument<br/>brandvägg: Deny")]
+    end
+
+    P -.->|VNet-integration| SA
+    SA -->|anmälan| A
+    A -.->|VNet-integration| SF
+    SF --> SD
+    SA --> SD
+    SD --> PE --> ST
+
+    A -->|anmälan + bild| PA["Power Automate<br/>Nordvik-felanmalan"]
+    PA --> SP["SharePoint-listan<br/>Felanmalningar"]
+    PA --> OL["Outlook<br/>mejl till förvaltarna,<br/>hög prioritet vid akut fel"]
+
+    F["Förvaltare<br/>sg-nordvik-forvaltare"] -->|redigera| SP
+    E["Ekonomi<br/>sg-nordvik-ekonomi"] -->|läsa| SP
 ```
 
 En felanmälan, steg för steg:
