@@ -334,6 +334,17 @@ Privata endpoints ignorerar NSG-regler som standard (`privateEndpointNetworkPoli
 
 Lagringen är alltså skyddad i tre lager: lagringskontots egen brandvägg (`Deny`), privat endpoint utan publik adress, och NSG som släpper in bara de två compute-subnäten.
 
+Kopplingen mellan subnät och NSG, verifierad i den deployade miljön:
+
+```
+PS> az network vnet subnet list --resource-group rg-nordvik --vnet-name vnet-nordvik --query "[].{subnat:name, nsg:networkSecurityGroup.id, pePolicy:privateEndpointNetworkPolicies}" -o table
+snet-data  .../networkSecurityGroups/nsg-nordvik-data  NetworkSecurityGroupEnabled
+snet-app   .../networkSecurityGroups/nsg-nordvik-app   Disabled
+snet-func  .../networkSecurityGroups/nsg-nordvik-func  Disabled
+```
+
+Att NSG:n på `snet-data` släpper igenom rätt trafik syns i "Mina anmälningar" (Delmoment 1): där läser portalen direkt från lagringen via den privata endpointen.
+
 ## Delmoment 4: Storage
 
 Felanmälningar har två sorters innehåll med olika livslängd. Bilderna som hör till en anmälan är färska och läses ofta i början, medan kontrakt och besiktningsprotokoll läses sällan efter de tre första månaderna. De läggs därför i varsin container i samma lagringskonto, med olika regler.
