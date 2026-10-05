@@ -31,6 +31,27 @@ Allt för examinationen ligger i mappen `v41`. Strukturen byggs upp delmoment f�
 
 Följer kursens namnmönster typ-företag-syfte, t.ex. `rg-nordvik`, `vm-nordvik-web`, `vnet-nordvik`. Storage account: `stnordvik80idralt02` (typ + företag + användarnamn + löpnummer, `01` var redan taget globalt så löpnumret höjdes).
 
+## Taggning
+
+Ekonomi vill följa kostnad per fastighet och avdelning, så alla resurser i `rg-nordvik` taggas med:
+
+- `avdelning=fastighetsforvaltning`
+- `kostnadsstalle=nordvik-portal`
+- `fastighet=gemensam`
+
+Portalen är en delad plattform för alla 48 fastigheter, inte en resurs per fastighet, så `fastighet`-taggen får värdet `gemensam` istället för en specifik beteckning. Det ger ekonomi samma dimension att filtrera på som en resurs knuten till en enskild fastighet hade haft, men visar tydligt att kostnaden är gemensam infrastruktur.
+
+Alla resurser taggades i efterhand i ett svep, inklusive sådana Azure skapar automatiskt (Application Insights, App Service-planer):
+
+```powershell
+$resourceIds = az resource list --resource-group rg-nordvik --query "[].id" -o tsv
+foreach ($id in $resourceIds) {
+    az resource tag --ids $id --tags avdelning=fastighetsforvaltning kostnadsstalle=nordvik-portal fastighet=gemensam --is-incremental
+}
+```
+
+`--is-incremental` lägger till taggar utan att skriva över de som redan fanns.
+
 ## Delmoment 1: Compute
 
 Portalen består av två delar med olika behov. Hyresgästen ska kunna logga in och skicka in en felanmälan dygnet runt, men trafiken är mycket ojämn: nästan ingen trafik 00-06, toppar 07-09 och 17-20, och upp mot 120 samtidiga användare vid månadsskifte eller en driftstörning. Samtidigt ska lösningen tåla att en enskild instans faller bort, och Nordvik vill inte betala för kapacitet som står still nattetid.
