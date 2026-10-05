@@ -1,0 +1,20 @@
+{
+  "rules": [
+    {
+      "enabled": true,
+      "name": "dokument-till-cool",
+      "type": "Lifecycle",
+      "definition": {
+        "filters": {
+          "blobTypes": ["blockBlob"],
+          "prefixMatch": ["dokument/"]
+        },
+        "actions": {
+          "baseBlob": {
+            "tierToCool": { "daysAfterModificationGreaterThan": 90 }
+          }
+        }
+      }
+    }
+  ]
+}

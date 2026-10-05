@@ -29,4 +29,44 @@ Allt för examinationen ligger i mappen `v41`. Strukturen byggs upp delmoment f�
 
 ## Namngivning
 
-Följer kursens namnmönster typ-företag-syfte, t.ex. `rg-nordvik`, `vm-nordvik-web`, `vnet-nordvik`. Storage account: `stnordvik80idralt01` (typ + företag + användarnamn + löpnummer).
+Följer kursens namnmönster typ-företag-syfte, t.ex. `rg-nordvik`, `vm-nordvik-web`, `vnet-nordvik`. Storage account: `stnordvik80idralt02` (typ + företag + användarnamn + löpnummer, `01` var redan taget globalt så löpnumret höjdes).
+
+## Delmoment 4: Storage
+
+Felanmälningar har två sorters innehåll med olika livslängd. Bilderna som hör till en anmälan är färska och läses ofta i början, medan kontrakt och besiktningsprotokoll läses sällan efter de tre första månaderna. De läggs därför i varsin container i samma lagringskonto, med olika regler.
+
+Resursgrupp och lagringskonto, taggat för ekonomins kostnadsuppföljning på avdelning/kostnadsställe:
+
+```
+az group create --name rg-nordvik --location swedencentral
+az group update --name rg-nordvik --tags avdelning=fastighetsforvaltning kostnadsstalle=nordvik-portal
+
+az storage account create --name stnordvik80idralt02 --resource-group rg-nordvik --location swedencentral --sku Standard_LRS --kind StorageV2 --access-tier Hot --allow-blob-public-access false --min-tls-version TLS1_2 --tags avdelning=fastighetsforvaltning kostnadsstalle=nordvik-portal
+```
+
+`--allow-blob-public-access false` stänger publik blobåtkomst på hela kontot direkt. Nätverket (privat endpoint) låses i nätverksdelen.
+
+De två containrarna, båda utan publik åtkomst:
+
+```
+PS> az storage container create --account-name stnordvik80idralt02 --name anmalningar --auth-mode key --public-access off
+{
+  "created": true
+}
+
+PS> az storage container create --account-name stnordvik80idralt02 --name dokument --auth-mode key --public-access off
+{
+  "created": true
+}
+```
+
+| Container | Innehåll | Tier |
+|---|---|---|
+| `anmalningar` | felanmälningar, bild plus uppgifter | Hot |
+| `dokument` | kontrakt och besiktningsprotokoll | Hot, flyttas till Cool efter 90 dagar |
+
+Lifecycle-policyn som sköter flytten till Cool ligger som kod i [`storage/lifecycle-policy.json`](storage/lifecycle-policy.json) och gäller bara filer i `dokument/`:
+
+```
+az storage account management-policy create --account-name stnordvik80idralt02 --resource-group rg-nordvik --policy @v41/storage/lifecycle-policy.json
+```
