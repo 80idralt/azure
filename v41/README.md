@@ -18,7 +18,7 @@ Samma Azure-tekniker som använts genom kursen återanvänds som mönster, men d
 
 Allt för examinationen ligger i mappen `v41`. Strukturen byggs upp delmoment för delmoment:
 
-- [ ] Del A: Dokumentation av centrala tjänster och virtualiseringsnivåer
+- [x] Del A: Dokumentation av centrala tjänster och virtualiseringsnivåer
 - [x] Delmoment 1: Compute - värdmiljö och felanmälningsformulär
 - [x] Delmoment 2: IAM - roller för hyresgäst, förvaltare, ekonomi
 - [x] Delmoment 3: Nätverk och säkerhet - defense in depth
@@ -26,6 +26,45 @@ Allt för examinationen ligger i mappen `v41`. Strukturen byggs upp delmoment f�
 - [x] Delmoment 5: IaC - ARM-templates, versionshanterat
 - [x] Delmoment 6: Automation och integration - Power Automate mot SharePoint/Outlook
 - [ ] Delmoment 7: Dokumentation - hur lösningen planerats, implementerats och kan återskapas
+
+## Del A: Centrala tjänster och virtualiseringsnivåer
+
+### Tjänsterna i lösningen
+
+| Område | Tjänst | Vad den gör hos Nordvik |
+|---|---|---|
+| Compute | **Azure Functions** (Flex Consumption) | Kör portalen och mottagningen av anmälningar. Startar vid behov och stängs när ingen använder den. |
+| Nätverk | **Virtual Network** med subnät | Ett eget, privat nätverk där funktionerna och lagringen pratar med varandra. |
+| Nätverk | **Network Security Group (NSG)** | Brandväggsregler per subnät, bestämmer vilken trafik som släpps in. |
+| Nätverk | **Private Endpoint** + **Private DNS** | Ger lagringskontot en privat adress inne i nätverket, så det aldrig behöver vara åtkomligt från internet. |
+| Storage | **Blob Storage** med **lifecycle-policy** | Sparar anmälningar och bilder, flyttar gamla dokument till billigare lagring automatiskt. |
+| IAM | **Entra ID**, **RBAC**, **hanterade identiteter** | Grupper för förvaltare och ekonomi, roller med minsta möjliga behörighet. Funktionerna loggar in mot lagringen utan lösenord. |
+| IaC | **ARM-mallar** | Hela Azure-miljön beskriven som kod, kan byggas om identiskt med ett skript. |
+| Automation | **Power Automate**, **SharePoint**, **Outlook** | Lägger anmälan i en lista och mejlar förvaltaren, med extra mejl vid akuta fel. |
+| Övervakning | **Application Insights** | Loggar och fel från funktionerna. |
+
+### Tre nivåer av virtualisering
+
+Alla tre kör kod på Microsofts hårdvara. Skillnaden är hur mycket man själv måste sköta.
+
+| | Virtuell maskin (VM) | Container | Serverless |
+|---|---|---|---|
+| **Vad man får** | En hel dator med eget operativsystem | Ett paket med appen och det den behöver, som delar operativsystem med andra | Bara sin egen kod, Azure sköter resten |
+| **Man sköter själv** | Operativsystem, uppdateringar, säkerhetspatchar, skalning, appen | Container-avbilden och appen, oftast skalning | Bara koden |
+| **Kostnad** | Betalar så länge den är igång, även när ingen använder den | Betalar för igång-tid, kan ofta minskas | Betalar per körning, nästan noll när ingen använder den |
+| **Skalning** | Man lägger till fler maskiner själv | Snabbare än VM, men måste konfigureras | Automatisk, Azure startar fler instanser vid behov |
+| **Passar för** | Gamla system, full kontroll, specialprogram | Appar som ska flyttas lätt mellan miljöer | Händelsestyrda uppgifter med ojämn trafik |
+
+### Varför serverless för Nordvik
+
+Nordviks krav pekar alla åt samma håll:
+
+- **Ojämn trafik.** Nästan inget mellan 00 och 06, toppar morgon och kväll, upp till 120 samtidiga användare vid månadsskifte. Serverless skalar upp själv vid toppar och ner till noll på natten.
+- **Tåla att en instans faller bort.** En ensam VM eller container är en enda punkt som kan gå sönder. Med serverless sprider Azure körningarna över flera instanser automatiskt.
+- **Inte betala för stillastående kapacitet.** Nordvik betalar bara när någon faktiskt använder portalen.
+- **Lite drift.** Ingen behöver patcha operativsystem, det gör Azure.
+
+**Bortvalt:** En VM hade krävt minst två maskiner och en lastbalanserare för att tåla att en faller bort, och hade kostat pengar dygnet runt. En container löser mer av det, men kräver fortfarande att man själv bygger och underhåller avbilder och sätter upp skalning. För en portal som i grunden tar emot ett formulär och sparar det är serverless den enklaste och billigaste lösningen som uppfyller alla krav.
 
 ## Namngivning
 
@@ -59,11 +98,7 @@ Två resurser krånglade:
 
 ## Delmoment 1: Compute
 
-Portalen består av två delar med olika behov. Hyresgästen ska kunna logga in och skicka in en felanmälan dygnet runt, men trafiken är mycket ojämn: nästan ingen trafik 00-06, toppar 07-09 och 17-20, och upp mot 120 samtidiga användare vid månadsskifte eller en driftstörning. Samtidigt ska lösningen tåla att en enskild instans faller bort, och Nordvik vill inte betala för kapacitet som står still nattetid.
-
-En vanlig virtuell maskin, eller en enskild container, är alltid en enda instans och uppfyller inte kravet på att tåla att en instans faller bort.
-
-**Valet:** hela compute-delen körs som **Azure Functions i Flex Consumption-planen**. Serverless löser både kraven på en gång utan extra arbete: Azure sprider automatiskt körningar över flera instanser, så det finns aldrig en enda instans att förlora, och kostnaden går mot noll när ingen använder portalen.
+Hela compute-delen körs som **Azure Functions i Flex Consumption-planen**, motiverat i Del A.
 
 Två funktionsappar, båda i Flex Consumption-planen, Python 3.11, med ett gemensamt lagringskonto för sin egen drift (`stnordvik80idralt03`, separat från affärsdatan, se Storage):
 
