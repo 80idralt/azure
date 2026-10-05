@@ -223,6 +223,25 @@ Behörigheterna är satta via sajtens tre standardgrupper (Owners/Members/Visito
 
 Samma lista, två behörighetsnivåer, ingen dubblett av datan. Hyresgäster har ingen åtkomst till sajten alls, de interagerar bara med portalen.
 
+**Verifierat med testanvändare, på riktigt.** `Test Forvaltare` ser fullt verktygsfält (Nytt, Redigera, Ångra, Ta bort) och kan ändra en anmälan:
+
+![Förvaltare har redigeringsrätt](images/sharepoint-forvaltare-edit.png)
+
+`Test Ekonomi` ser samma lista, men verktygsfältet saknar Nytt/Redigera/Ta bort, och varje rad har en överkorsad penna som visar att objektet inte går att redigera:
+
+![Ekonomi är skrivskyddad](images/sharepoint-ekonomi-readonly.png)
+
+RBAC mot lagringen omverifierades efter ARM-återbygget, scopat till den nya containern:
+
+```
+PS> az role assignment list --scope <nya-containerns-scope> -o table
+Principal              Role                           
+sg-nordvik-ekonomi      Storage Blob Data Reader
+sg-nordvik-forvaltare   Storage Blob Data Contributor
+<func-nordvik-arenden>  Storage Blob Data Contributor
+<func-nordvik-portal>   Storage Blob Data Reader
+```
+
 ### Power Automate-flödet
 
 Flödet `Nordvik-felanmalan` triggas av en **HTTP-begäran** (anonym, "vem som helst med URL:en" — `func-nordvik-arenden` postar dit efter att anmälan sparats). Tre steg efter triggern:
