@@ -52,6 +52,11 @@ foreach ($id in $resourceIds) {
 
 `--is-incremental` lägger till taggar utan att skriva över de som redan fanns.
 
+Två resurser krånglade:
+
+- **DNS-zonens VNet-länk** (`link-nordvik`) gick inte att tagga med `az resource tag` (den klagade på ett skrivskyddat fält den fick tillbaka från sig själv). Löst med det specifika kommandot istället: `az network private-dns link vnet update ... --tags ...`.
+- **Nätverkskortet** som hör till den privata endpointen gick inte att tagga alls: `(CannotModifyNicAttachedToPrivateEndpoint) ... It can not be modified by user.` Det är en Azure-begränsning, inte ett eget fel — nätverkskort som skapas automatiskt av en privat endpoint är systemägda och får inte ändras av användaren, taggar inkluderat. Enda resursen i hela lösningen som inte kunde taggas, av skäl utanför vår kontroll.
+
 ## Delmoment 1: Compute
 
 Portalen består av två delar med olika behov. Hyresgästen ska kunna logga in och skicka in en felanmälan dygnet runt, men trafiken är mycket ojämn: nästan ingen trafik 00-06, toppar 07-09 och 17-20, och upp mot 120 samtidiga användare vid månadsskifte eller en driftstörning. Samtidigt ska lösningen tåla att en enskild instans faller bort, och Nordvik vill inte betala för kapacitet som står still nattetid.
