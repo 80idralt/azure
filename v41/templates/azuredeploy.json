@@ -47,6 +47,9 @@
     "subnetData": "snet-data",
     "subnetApp": "snet-app",
     "subnetFunc": "snet-func",
+    "nsgData": "nsg-nordvik-data",
+    "nsgApp": "nsg-nordvik-app",
+    "nsgFunc": "nsg-nordvik-func",
     "privateDnsZoneName": "privatelink.blob.core.windows.net",
     "privateEndpointName": "pe-nordvik-storage",
     "anmalningarContainer": "anmalningar",
@@ -63,11 +66,89 @@
   },
   "resources": [
     {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nsgData')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "allow-https-from-portal",
+            "properties": {
+              "priority": 100, "direction": "Inbound", "access": "Allow", "protocol": "Tcp",
+              "sourceAddressPrefix": "10.0.2.0/27", "sourcePortRange": "*",
+              "destinationAddressPrefix": "*", "destinationPortRange": "443"
+            }
+          },
+          {
+            "name": "allow-https-from-arenden",
+            "properties": {
+              "priority": 110, "direction": "Inbound", "access": "Allow", "protocol": "Tcp",
+              "sourceAddressPrefix": "10.0.3.0/27", "sourcePortRange": "*",
+              "destinationAddressPrefix": "*", "destinationPortRange": "443"
+            }
+          },
+          {
+            "name": "deny-all-inbound",
+            "properties": {
+              "priority": 4000, "direction": "Inbound", "access": "Deny", "protocol": "*",
+              "sourceAddressPrefix": "*", "sourcePortRange": "*",
+              "destinationAddressPrefix": "*", "destinationPortRange": "*"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nsgApp')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "deny-all-inbound",
+            "properties": {
+              "priority": 4000, "direction": "Inbound", "access": "Deny", "protocol": "*",
+              "sourceAddressPrefix": "*", "sourcePortRange": "*",
+              "destinationAddressPrefix": "*", "destinationPortRange": "*"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nsgFunc')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "deny-all-inbound",
+            "properties": {
+              "priority": 4000, "direction": "Inbound", "access": "Deny", "protocol": "*",
+              "sourceAddressPrefix": "*", "sourcePortRange": "*",
+              "destinationAddressPrefix": "*", "destinationPortRange": "*"
+            }
+          }
+        ]
+      }
+    },
+    {
       "type": "Microsoft.Network/virtualNetworks",
       "apiVersion": "2023-09-01",
       "name": "[variables('vnetName')]",
       "location": "[parameters('location')]",
       "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgData'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgApp'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgFunc'))]"
+      ],
       "properties": {
         "addressSpace": { "addressPrefixes": ["10.0.0.0/16"] },
         "subnets": [
@@ -75,13 +156,15 @@
             "name": "[variables('subnetData')]",
             "properties": {
               "addressPrefix": "10.0.1.0/24",
-              "privateEndpointNetworkPolicies": "Disabled"
+              "privateEndpointNetworkPolicies": "NetworkSecurityGroupEnabled",
+              "networkSecurityGroup": { "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgData'))]" }
             }
           },
           {
             "name": "[variables('subnetApp')]",
             "properties": {
               "addressPrefix": "10.0.2.0/27",
+              "networkSecurityGroup": { "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgApp'))]" },
               "serviceEndpoints": [
                 { "service": "Microsoft.Web" }
               ],
@@ -97,6 +180,7 @@
             "name": "[variables('subnetFunc')]",
             "properties": {
               "addressPrefix": "10.0.3.0/27",
+              "networkSecurityGroup": { "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgFunc'))]" },
               "delegations": [
                 {
                   "name": "nordvik-func-delegation",

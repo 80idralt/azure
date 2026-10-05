@@ -29,7 +29,7 @@ Allt för examinationen ligger i mappen `v41`. Strukturen byggs upp delmoment f�
 
 ## Namngivning
 
-Följer kursens namnmönster typ-företag-syfte, t.ex. `rg-nordvik`, `vm-nordvik-web`, `vnet-nordvik`. Storage account: `stnordvik80idralt02` (typ + företag + användarnamn + löpnummer, `01` var redan taget globalt så löpnumret höjdes).
+Följer kursens namnmönster typ-företag-syfte, t.ex. `rg-nordvik`, `vnet-nordvik`, `func-nordvik-portal`. Storage account: `stnordvik80idralt02` (typ + företag + användarnamn + löpnummer, `01` var redan taget globalt så löpnumret höjdes).
 
 ## Taggning
 
@@ -63,11 +63,11 @@ Portalen består av två delar med olika behov. Hyresgästen ska kunna logga in 
 
 En vanlig virtuell maskin, eller en enskild container, är alltid en enda instans och uppfyller inte kravet på att tåla att en instans faller bort.
 
-**Valet:** hela compute-delen körs som **Azure Functions i Flex Consumption-planen**, samma tjänst som i v40. Serverless löser både kraven på en gång utan extra arbete: Azure sprider automatiskt körningar över flera instanser, så det finns aldrig en enda instans att förlora, och kostnaden går mot noll när ingen använder portalen.
+**Valet:** hela compute-delen körs som **Azure Functions i Flex Consumption-planen**. Serverless löser både kraven på en gång utan extra arbete: Azure sprider automatiskt körningar över flera instanser, så det finns aldrig en enda instans att förlora, och kostnaden går mot noll när ingen använder portalen.
 
 Två funktionsappar, båda i Flex Consumption-planen, Python 3.11, med ett gemensamt lagringskonto för sin egen drift (`stnordvik80idralt03`, separat från affärsdatan, se Storage):
 
-- `func-nordvik-portal` (publik) - visar inloggning och felanmälningsformuläret (rubrik, beskrivning, bild). Kopplad till `snet-app`.
+- `func-nordvik-portal` (publik) - visar felanmälningsformuläret (rubrik, beskrivning, bild) och sidan "Mina anmälningar". Kopplad till `snet-app`.
 - `func-nordvik-arenden` (bara nåbar inifrån nätverket) - tar emot anmälan, sparar den, och startar Power Automate-flödet. Kopplad till `snet-func`.
 
 ```
@@ -84,7 +84,7 @@ VNet-kopplingen styr bara utgående trafik (vägen till lagringen), inte vem som
 az functionapp config access-restriction add --resource-group rg-nordvik --name func-nordvik-arenden --rule-name allow-portal --priority 100 --action Allow --vnet-name vnet-nordvik --subnet snet-app
 ```
 
-`func-nordvik-portal` har `vnetRouteAllEnabled: true`, så all dess utgående trafik, inklusive anrop till `func-nordvik-arenden`, går via `snet-app`. Regeln släpper bara in trafik därifrån, allt annat nekas automatiskt så fort en regel finns:
+`func-nordvik-portal` skickar sin applikationstrafik (`outboundVnetRouting.applicationTraffic: true`), inklusive anrop till `func-nordvik-arenden`, via `snet-app`. Regeln släpper bara in trafik därifrån, allt annat nekas automatiskt så fort en regel finns:
 
 ```
 [
@@ -95,7 +95,7 @@ az functionapp config access-restriction add --resource-group rg-nordvik --name 
 
 ### Koden i `func-nordvik-arenden`
 
-Koden ligger i [`arenden/function_app.py`](arenden/function_app.py). Den tar emot rubrik, beskrivning, kategori, fastighet och hyresgästnummer, bygger ett eget id (`fa-åååmmdd-ttmmss-slump`, egen prefix så det inte liknar v40:s `arende-`), sparar en JSON-fil plus en eventuell bild i containern `anmalningar`, och postar vidare till Power Automate när flödet finns. Tidpunkten sparas läsbart som `2026-10-05:09:19` istället för en svårläst ISO-tidsstämpel.
+Koden ligger i [`arenden/function_app.py`](arenden/function_app.py). Den tar emot rubrik, beskrivning, kategori, fastighet och hyresgästnummer, bygger ett eget id (`fa-åååmmdd-ttmmss-slump`, eget prefix), sparar en JSON-fil plus en eventuell bild i containern `anmalningar`, och postar vidare till Power Automate när flödet finns. Tidpunkten sparas läsbart som `2026-10-05:09:19` istället för en svårläst ISO-tidsstämpel.
 
 Testat med curl, samma sätt som tidigare veckor:
 
@@ -128,9 +128,9 @@ Förvaltare och ekonomi loggar inte in i appen alls, de arbetar istället i Shar
 
 Tre roller, enligt least privilege:
 
-- **Hyresgäst:** ingen egen Entra-identitet. Loggar in i appen med ett hyresgästnummer (mot en egen liten lista, inte Entra ID), hyresgästnumret bär med sig vilken fastighet/lägenhet personen hör till. Appen visar bara den inloggade hyresgästens egna anmälningar. En skarp lösning med 5500 externa hyresgäster hade använt Entra External ID/B2C, men det är inget kursen gått igenom, så det är en medveten avgränsning.
-- **Förvaltare** och **Ekonomi:** riktiga Entra-identiteter, men bara förvaltare har en egen Microsoft 365-grupp/Team:
-  - `Nordvik-Forvaltare` — **Microsoft 365-grupp**, ger en Teams-kanal (notiser) och en mejladress (det akuta mejlet).
+- **Hyresgäst:** ingen egen Entra-identitet och ingen inloggning. Formuläret är öppet och hyresgästnumret är ett vanligt fält, inte en hemlighet. "Mina anmälningar" filtrerar helt enkelt på det nummer som skrivs in, utan att kontrollera vem som skriver. En skarp lösning med 5500 externa hyresgäster hade använt Entra External ID/B2C, men det är inget kursen gått igenom, så det är en medveten avgränsning. Hyresgästen har aldrig någon direkt åtkomst till lagringen, bara portalens egen hanterade identitet har det (läsrätt).
+- **Förvaltare** och **Ekonomi:** riktiga Entra-identiteter, men bara förvaltare har en egen Microsoft 365-grupp:
+  - `Nordvik-Forvaltare` — **Microsoft 365-grupp**, ger SharePoint-sajten och en mejladress (dit notisen och det akuta mejlet går).
   - `sg-nordvik-forvaltare` / `sg-nordvik-ekonomi` — vanliga **säkerhetsgrupper**, används för RBAC mot lagringen.
 
   Planen var från början en enda grupp per roll som gjorde allt (RBAC + Teams + mejl). Det stötte på en verklig begränsning: Azure tillåter bara säkerhetsaktiverade grupper i RBAC-rolltilldelningar, och en Microsoft 365-grupp är det inte som standard (`(GroupTypeNotSupported) Only security-enabled groups can be used in role assignments`). Lösningen blev separata säkerhetsgrupper för RBAC.
@@ -140,8 +140,7 @@ Tre roller, enligt least privilege:
 Microsoft 365-grupperna, skapade med PowerShell-modulen MicrosoftTeams:
 
 ```
-$forvaltare = New-Team -DisplayName "Nordvik-Forvaltare" -MailNickName "nordvik-forvaltare" -Visibility Private -Description "Förvaltare, hanterar felanmälningar"
-$ekonomi = New-Team -DisplayName "Nordvik-Ekonomi" -MailNickName "nordvik-ekonomi" -Visibility Private -Description "Ekonomi, läsande insyn i felanmälningar"
+New-Team -DisplayName "Nordvik-Forvaltare" -MailNickName "nordvik-forvaltare" -Visibility Private -Description "Förvaltare, hanterar felanmälningar"
 ```
 
 Säkerhetsgrupperna, skapade med `az ad group create` (ger `securityEnabled: true` per automatik, till skillnad från `New-Team`):
@@ -175,7 +174,7 @@ Funktionernas egna hanterade identiteter fick samma behandling, också scopat ti
 
 ### Verifierat med testanvändare
 
-Två testkonton skapades och lades i respektive säkerhetsgrupp (plus motsvarande Teams-grupp):
+Två testkonton skapades och lades i respektive säkerhetsgrupp:
 
 ```
 az ad user create --display-name "Test Forvaltare" --user-principal-name "test.forvaltare@Altun1980.onmicrosoft.com" --password "..." --force-change-password-next-sign-in true
@@ -250,7 +249,7 @@ Flödet `Nordvik-felanmalan` triggas av en **HTTP-begäran** (anonym, "vem som h
 2. **Skicka ett e-postmeddelande (V2)** till `nordvik-forvaltare@Altun1980.onmicrosoft.com`, alltid.
 3. **Villkor:** om `akut` är sant, ett andra mejl till samma adress, markerat **Hög prioritet**, med ämnet "AKUT FELANMÄLAN: ...".
 
-Flödets URL sparades som app-settingen `FLOW_URL` på `func-nordvik-arenden` (via Azure Portal, eftersom `&`-tecknen i adressen tolkades som kommandoavskiljare av PowerShell/cmd när den sattes via `az`).
+Flödets URL sparas som app-settingen `FLOW_URL` på `func-nordvik-arenden`. Den skickas in som en säker parameter vid driftsättningen (se Delmoment 5), eftersom `&`-tecknen i adressen annars tolkas som kommandoavskiljare av PowerShell/cmd.
 
 ### Verifierat end-to-end
 
@@ -323,7 +322,17 @@ az network vnet subnet create --name snet-func --resource-group rg-nordvik --vne
 
 `snet-app` används av `func-nordvik-portal`, `snet-func` av `func-nordvik-arenden`, så att den interna funktionen inte är nåbar utifrån.
 
-**Om NSG:** `snet-data` har NSG-regler avstängda för privata endpoints som standard i Azure (`privateEndpointNetworkPolicies: Disabled`), så en NSG där skulle inte filtrera något på riktigt. NSG:n i den här lösningen läggs istället på compute-subnäten, med samma princip som i v36: en regel som uttrycker exakt det subnätets jobb.
+**Nätverkssäkerhetsgrupper (NSG):** varje subnät har en egen NSG, definierad i ARM-mallen, med en regel som uttrycker exakt det subnätets jobb:
+
+| NSG | Subnät | Regler (inkommande) |
+|---|---|---|
+| `nsg-nordvik-data` | `snet-data` (lagringens privata endpoint) | Tillåt 443 från `snet-app` och `snet-func`, neka allt annat |
+| `nsg-nordvik-app` | `snet-app` (portalens utgående trafik) | Neka allt inkommande |
+| `nsg-nordvik-func` | `snet-func` (ärendefunktionens utgående trafik) | Neka allt inkommande |
+
+Privata endpoints ignorerar NSG-regler som standard (`privateEndpointNetworkPolicies: Disabled`), så på `snet-data` är den satt till `NetworkSecurityGroupEnabled` för att reglerna ska gälla på riktigt. Compute-subnäten används bara för utgående VNet-integration och ska aldrig ta emot inkommande trafik, så där nekas allt inkommande. Utgående trafik begränsas inte, eftersom funktionerna behöver nå DNS, Azure Monitor och Power Automate.
+
+Lagringen är alltså skyddad i tre lager: lagringskontots egen brandvägg (`Deny`), privat endpoint utan publik adress, och NSG som släpper in bara de två compute-subnäten.
 
 ## Delmoment 4: Storage
 
@@ -371,13 +380,13 @@ Allt som byggdes för hand ovan (nätverk, lagring, de två funktionerna, RBAC-r
 
 ### Vad som är med, och vad som inte är det
 
-Mallen beskriver allt i Azure: VNet med de tre subnäten, båda lagringskontona med containrar och lifecycle-policyn, den privata DNS-zonen och endpointen, de två Function-apparna (Flex Consumption, VNet-integrerade, nätverksbegränsningen på `func-nordvik-arenden`) och de fyra RBAC-rolltilldelningarna.
+Mallen beskriver allt i Azure: VNet med de tre subnäten och deras NSG:er, båda lagringskontona med containrar och lifecycle-policyn, den privata DNS-zonen och endpointen, de två Function-apparna (Flex Consumption, VNet-integrerade, nätverksbegränsningen på `func-nordvik-arenden`) och de fyra RBAC-rolltilldelningarna.
 
 **Inte med:** Entra-grupperna (`sg-nordvik-forvaltare`, `sg-nordvik-ekonomi`, `Nordvik-Forvaltare`), SharePoint-listan och Power Automate-flödet. De är inte Azure-resurser och kan inte beskrivas i en ARM-mall, precis som konstaterat i Storage- och Automation-delmomenten. Grupp-ID:na tas istället in som parametrar (`forvaltareGroupId`, `ekonomiGroupId`), så mallen vet vem som ska få vilken roll utan att själv skapa grupperna.
 
 ### Namngivning i mallen
 
-Istället för handvalda namn (som krockade och behövde höjt löpnummer, se Storage-delmomentet) används `uniqueString(resourceGroup().id)`, samma mönster som v38/v40. Den som klonar repot kan köra mallen utan att själv behöva hitta på unika namn.
+Istället för handvalda namn (som krockade och behövde höjt löpnummer, se Storage-delmomentet) används `uniqueString(resourceGroup().id)`. Den som klonar repot kan köra mallen utan att själv behöva hitta på unika namn.
 
 ### En hemlighet som aldrig får hamna i repot
 
@@ -385,7 +394,7 @@ Power Automate-flödets URL innehåller en inbyggd signatur, i praktiken en nyck
 
 ### Skripten
 
-[`deploy.ps1`](deploy.ps1) skapar resursgruppen, kör mallen, och publicerar sedan koden i båda funktionerna (`func azure functionapp publish`), med samma återförsöksmönster som v40 byggde för att hantera att RBAC-rollerna kan ta en minut att slå igenom. [`destroy.ps1`](destroy.ps1) river hela resursgruppen.
+[`deploy.ps1`](deploy.ps1) skapar resursgruppen, kör mallen, och publicerar sedan koden i båda funktionerna. `func-nordvik-arenden` får sin kod via zip-deploy, eftersom `func azure functionapp publish` försöker ringa upp appen efteråt och alltid får `403` mot en funktion som medvetet är nätverksstängd. `func-nordvik-portal` publiceras med `func azure functionapp publish` och ett återförsöksmönster, eftersom RBAC-rollerna kan ta en minut att slå igenom. [`destroy.ps1`](destroy.ps1) river hela resursgruppen.
 
 ### Byggd från mallen, riktig rivning och återuppbyggnad
 
