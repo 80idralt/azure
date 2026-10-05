@@ -5,6 +5,13 @@
     "location": { "value": "swedencentral" },
     "forvaltareGroupId": { "value": "836c0262-c307-4b2d-91fe-5c89dfb6c286" },
     "ekonomiGroupId": { "value": "b11988a3-db82-4ca7-ab72-b0a960f1d752" },
-    "flowUrl": { "value": "<FYLL I POWER AUTOMATE-FLODETS HTTP-TRIGGER-URL HAR, ALDRIG I REPOT>" }
+    "flowUrl": { "value": "<FYLL I POWER AUTOMATE-FLODETS HTTP-TRIGGER-URL HAR, ALDRIG I REPOT>" },
+    "tags": {
+      "value": {
+        "avdelning": "fastighetsforvaltning",
+        "kostnadsstalle": "nordvik-portal",
+        "fastighet": "gemensam"
+      }
+    }
   }
 }
