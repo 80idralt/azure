@@ -138,6 +138,27 @@ Funktionernas egna hanterade identiteter fick samma behandling, också scopat ti
 | `func-nordvik-arenden` (system-assigned) | Storage Blob Data Contributor — sparar anmälningar |
 | `func-nordvik-portal` (system-assigned) | Storage Blob Data Reader — visar listor, skriver aldrig direkt |
 
+### Verifierat med testanvändare
+
+Två testkonton skapades och lades i respektive säkerhetsgrupp (plus motsvarande Teams-grupp):
+
+```
+az ad user create --display-name "Test Forvaltare" --user-principal-name "test.forvaltare@Altun1980.onmicrosoft.com" --password "..." --force-change-password-next-sign-in true
+az ad group member add --group "sg-nordvik-forvaltare" --member-id <user-id>
+```
+
+Rätt roll ärvs genom gruppen, inget behövde tilldelas per person (`--include-groups`, inte `--include-inherited`, som bara gäller ärvning mellan scope, inte gruppmedlemskap):
+
+```
+PS> az role assignment list --assignee <test-forvaltare-id> --include-groups --all -o table
+Principal              Role                           Scope
+sg-nordvik-forvaltare  Storage Blob Data Contributor  .../containers/anmalningar
+
+PS> az role assignment list --assignee <test-ekonomi-id> --include-groups --all -o table
+Principal           Role                      Scope
+sg-nordvik-ekonomi  Storage Blob Data Reader  .../containers/anmalningar
+```
+
 ## Delmoment 3: Nätverk och säkerhet
 
 Lagringen ska inte vara publikt åtkomlig. Lösningen är ett virtuellt nätverk med en **privat endpoint**, en egen ingång till lagringskontot som bara syns inifrån nätverket, i kombination med en **privat DNS-zon** som gör att kontots namn slår upp till en privat adress istället för en publik, bara för den som frågar inifrån vnet:et.
