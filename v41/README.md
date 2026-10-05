@@ -95,7 +95,7 @@ az functionapp config access-restriction add --resource-group rg-nordvik --name 
 
 ### Koden i `func-nordvik-arenden`
 
-Koden ligger i [`arenden/function_app.py`](arenden/function_app.py). Den tar emot rubrik, beskrivning, kategori, fastighet och hyresgästnummer, bygger ett eget id (`fa-åååmmdd-ttmmss-slump`, eget prefix), sparar en JSON-fil plus en eventuell bild i containern `anmalningar`, och postar vidare till Power Automate när flödet finns. Tidpunkten sparas läsbart som `2026-10-05:09:19` istället för en svårläst ISO-tidsstämpel.
+Koden ligger i [`arenden/function_app.py`](arenden/function_app.py). Den tar emot rubrik, beskrivning, kategori, fastighet och hyresgästnummer, bygger ett eget id (`fa-åååmmdd-ttmmss-slump`, eget prefix), sparar en JSON-fil plus en eventuell bild i containern `anmalningar`, och postar vidare till Power Automate när flödet finns. Tidpunkten sparas läsbart och i svensk tid (`Europe/Stockholm`), som `2026-10-05:09:19`, istället för en svårläst ISO-tidsstämpel i UTC.
 
 Testat med curl, samma sätt som tidigare veckor:
 
@@ -208,7 +208,6 @@ Listan `Felanmalningar` skapades på `Nordvik-Forvaltare`s SharePoint-sajt (Team
 | Kategori | Val: varme, vatten, las, ovrigt |
 | Fastighet | Enkel textrad |
 | Hyresgast | Enkel textrad |
-| Bildlank | Hyperlänk |
 | Status | Val: ny, pagaende, klar |
 | Akut | Ja/Nej |
 | Tidpunkt | Enkel textrad |
@@ -243,11 +242,25 @@ sg-nordvik-forvaltare   Storage Blob Data Contributor
 
 ### Power Automate-flödet
 
-Flödet `Nordvik-felanmalan` triggas av en **HTTP-begäran** (anonym, "vem som helst med URL:en" — `func-nordvik-arenden` postar dit efter att anmälan sparats). Tre steg efter triggern:
+Flödet `Nordvik-felanmalan` triggas av en **HTTP-begäran** (anonym, "vem som helst med URL:en" — `func-nordvik-arenden` postar dit efter att anmälan sparats). Fyra steg efter triggern:
 
 1. **Skapa objekt** i `Felanmalningar`-listan, alla fält kopplade mot triggerns JSON.
-2. **Skicka ett e-postmeddelande (V2)** till `nordvik-forvaltare@Altun1980.onmicrosoft.com`, alltid.
-3. **Villkor:** om `akut` är sant, ett andra mejl till samma adress, markerat **Hög prioritet**, med ämnet "AKUT FELANMÄLAN: ...".
+2. **Välj** gör om bilagorna till filer som Outlook kan bifoga (se nedan).
+3. **Skicka ett e-postmeddelande (V2)** till `nordvik-forvaltare@Altun1980.onmicrosoft.com`, alltid, med bilden bifogad.
+4. **Villkor:** om `akut` är sant, ett andra mejl till samma adress, markerat **Hög prioritet**, med ämnet "AKUT FELANMÄLAN: ..." och samma bild.
+
+### Bilden i mejlet
+
+Lagringskontot är nätverkslåst, så Power Automate kan inte hämta bilden via en länk. `func-nordvik-arenden` skickar därför med själva bilden i anropet till flödet, base64-kodad, i en lista `bilagor` (tom om ingen bild bifogades). Bilden sparas fortfarande i lagringen som vanligt. Base64-datan läggs bara i anropet till flödet, inte i `anmalan.json`.
+
+Outlooks bilagefält vill ha en riktig fil, inte base64-text. Steget **Välj** avkodar därför varje bilaga innan mejlet skickas:
+
+```
+Name:         item()?['Name']
+ContentBytes: base64ToBinary(item()?['ContentBytes'])
+```
+
+Båda mejlen tar sina bilagor från `body('Välj')`. En tom lista ger ett mejl utan bilaga, så inget extra villkor behövs för anmälningar utan bild.
 
 Flödets URL sparas som app-settingen `FLOW_URL` på `func-nordvik-arenden`. Den skickas in som en säker parameter vid driftsättningen (se Delmoment 5), eftersom `&`-tecknen i adressen annars tolkas som kommandoavskiljare av PowerShell/cmd.
 
@@ -264,7 +277,7 @@ Posten dök upp i SharePoint-listan:
 Och två mejl kom fram till `Nordvik-Forvaltare`s inkorg, det vanliga och det akuta (med hög prioritet, utropstecknet i listvyn):
 
 ![Vanligt mejl](images/mejl-vanligt.png)
-![Akut mejl, hög prioritet](images/mejl-akut.png)
+![Akut mejl, hög prioritet, med bilden bifogad](images/mejl-akut.png)
 
 Flödets egen körningshistorik bekräftar samma sak, en lyckad körning på 3 sekunder:
 

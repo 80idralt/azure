@@ -1,9 +1,11 @@
 import azure.functions as func
+import base64
 import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 from azure.identity import DefaultAzureCredential
@@ -26,7 +28,7 @@ def arenden(req: func.HttpRequest) -> func.HttpResponse:
     if not rubrik or not beskrivning or not hyresgast:
         return func.HttpResponse("Rubrik, beskrivning och hyresgästnummer måste fyllas i.", status_code=400)
 
-    nu = datetime.now(timezone.utc)
+    nu = datetime.now(ZoneInfo("Europe/Stockholm"))
     tidpunkt = nu.strftime("%Y-%m-%d:%H:%M")
     unikt_id = f"fa-{nu.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
     akut = kategori in AKUTA_KATEGORIER
@@ -51,16 +53,20 @@ def arenden(req: func.HttpRequest) -> func.HttpResponse:
     )
     container = blob_service.get_container_client("anmalningar")
 
-    container.upload_blob(f"{unikt_id}/anmalan.json", json.dumps(anmalan, ensure_ascii=False, indent=2))
-
+    # Bilagor i Outlooks format, så flödet kan bifoga listan rakt av i mejlen.
+    bilagor = []
     if bild is not None and bild.filename:
+        bilddata = bild.stream.read()
         anmalan["bild"] = bild.filename
-        container.upload_blob(f"{unikt_id}/{bild.filename}", bild.stream.read())
+        container.upload_blob(f"{unikt_id}/{bild.filename}", bilddata)
+        bilagor.append({"Name": bild.filename, "ContentBytes": base64.b64encode(bilddata).decode()})
+
+    container.upload_blob(f"{unikt_id}/anmalan.json", json.dumps(anmalan, ensure_ascii=False, indent=2))
 
     flow_url = os.environ.get("FLOW_URL")
     if flow_url:
         try:
-            requests.post(flow_url, json=anmalan, timeout=10)
+            requests.post(flow_url, json={**anmalan, "bilagor": bilagor}, timeout=10)
         except requests.RequestException as fel:
             logging.warning("Kunde inte nå Power Automate-flödet: %s", fel)
 
