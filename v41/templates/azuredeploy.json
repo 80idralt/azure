@@ -62,6 +62,7 @@
     "portalPlanName": "[concat('plan-nordvik-portal-', variables('suffix'))]",
     "blobDataContributorRoleId": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
     "blobDataReaderRoleId": "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1",
+    "costManagementReaderRoleId": "72fafb9e-0641-4937-9268-a91bfd8191a3",
     "anmalningarScope": "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStorageName'), 'default', variables('anmalningarContainer'))]"
   },
   "resources": [
@@ -567,6 +568,16 @@
       ],
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('blobDataReaderRoleId'))]",
+        "principalId": "[parameters('ekonomiGroupId')]",
+        "principalType": "Group"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, parameters('ekonomiGroupId'), variables('costManagementReaderRoleId'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('costManagementReaderRoleId'))]",
         "principalId": "[parameters('ekonomiGroupId')]",
         "principalType": "Group"
       }

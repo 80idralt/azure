@@ -135,6 +135,14 @@ foreach ($id in $resourceIds) {
 
 **Ett undantag:** nätverkskortet som den privata endpointen skapar automatiskt går inte att tagga (`CannotModifyNicAttachedToPrivateEndpoint`). Det ägs av Azure och får inte ändras av användaren. Alla andra resurser är taggade.
 
+### Så använder ekonomi taggarna
+
+Ekonomi följer kostnaden i **Cost Management → Cost analysis** i Azure-portalen och grupperar på en tagg (**Group by → Tag**). Grupperat på `kostnadsstalle` syns portalens kostnad som en egen del, `nordvik-portal`, skild från allt annat i prenumerationen. På samma sätt går det att gruppera eller filtrera på `avdelning` och `fastighet`:
+
+![Kostnad grupperad per kostnadsställe](images/kostnad-per-kostnadsstalle.png)
+
+För att ekonomi ska kunna öppna kostnadsanalysen själva har `sg-nordvik-ekonomi` rollen **Cost Management Reader** på resursgruppen (se Delmoment 2). Rollen ger bara rätt att läsa kostnader, inte att ändra något.
+
 ## Delmoment 1: Compute
 
 Hela compute-delen körs som **Azure Functions i Flex Consumption-planen**, motiverat i Del A.
@@ -202,7 +210,7 @@ Tre roller, enligt least privilege:
 
 - **Hyresgäst:** ingen egen Entra-identitet och ingen inloggning. Formuläret är öppet och hyresgästnumret är ett vanligt fält, inte en hemlighet. "Mina anmälningar" filtrerar på det nummer som skrivs in, utan att kontrollera vem som skriver. En skarp lösning med 5500 externa hyresgäster hade använt Entra External ID, men det ingår inte i kursen, så det är en medveten avgränsning. Hyresgästen har aldrig någon direkt åtkomst till lagringen, bara portalens egen hanterade identitet har det och bara med läsrätt.
 - **Förvaltare:** redigerar anmälningar i SharePoint och får mejlen. Skrivrätt till `anmalningar`-containern via RBAC.
-- **Ekonomi:** läser anmälningar i SharePoint. Bara läsrätt till `anmalningar`-containern via RBAC.
+- **Ekonomi:** läser anmälningar i SharePoint och följer kostnaderna i Cost Management. Bara läsrätt, både till `anmalningar`-containern och till kostnaderna.
 
 ### Två sorters grupper
 
@@ -225,7 +233,7 @@ az ad group create --display-name "sg-nordvik-ekonomi" --mail-nickname "sgnordvi
 
 ### RBAC mot lagringen
 
-Alla fyra rolltilldelningar är scopade till `anmalningar`-containern, inte hela lagringskontot:
+Rollerna mot lagringen är scopade till `anmalningar`-containern, inte hela lagringskontot:
 
 | Vem | Roll |
 |---|---|
@@ -233,6 +241,12 @@ Alla fyra rolltilldelningar är scopade till `anmalningar`-containern, inte hela
 | `sg-nordvik-ekonomi` | Storage Blob Data Reader |
 | `func-nordvik-arenden` (hanterad identitet) | Storage Blob Data Contributor, sparar anmälningar |
 | `func-nordvik-portal` (hanterad identitet) | Storage Blob Data Reader, visar listor men skriver aldrig |
+
+Ekonomi har dessutom en roll till, scopad till resursgruppen:
+
+| Vem | Roll | Varför |
+|---|---|---|
+| `sg-nordvik-ekonomi` | Cost Management Reader | Läsa kostnaderna per tagg i Cost Management (se Taggning) |
 
 ```
 az role assignment create --assignee 836c0262-c307-4b2d-91fe-5c89dfb6c286 --role "Storage Blob Data Contributor" --scope $scope
@@ -378,7 +392,7 @@ Allt i Azure beskrivs som kod i [`templates/azuredeploy.json`](templates/azurede
 
 ### Vad som är med och vad som inte är det
 
-**Med:** VNet med de tre subnäten och deras NSG:er, båda lagringskontona med containrar och lifecycle-policy, den privata DNS-zonen och endpointen, Application Insights, de två funktionsapparna (VNet-integrerade, med nätverksbegränsningen på `func-nordvik-arenden`) och de fyra RBAC-rolltilldelningarna.
+**Med:** VNet med de tre subnäten och deras NSG:er, båda lagringskontona med containrar och lifecycle-policy, den privata DNS-zonen och endpointen, Application Insights, de två funktionsapparna (VNet-integrerade, med nätverksbegränsningen på `func-nordvik-arenden`) och de fem RBAC-rolltilldelningarna.
 
 **Inte med:** Entra-grupperna, SharePoint-listan och Power Automate-flödet. De är inte Azure-resurser och kan inte beskrivas i en ARM-mall. Grupp-ID:na tas istället in som parametrar (`forvaltareGroupId`, `ekonomiGroupId`), så mallen vet vem som ska få vilken roll utan att själv skapa grupperna.
 
