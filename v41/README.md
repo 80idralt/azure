@@ -12,7 +12,7 @@
 
 Nordvik Fastigheter AB förvaltar bostäder och lokaler och vill lansera en hyresgästportal i molnet. Kärnan i portalen är en felanmälan: en hyresgäst fyller i rubrik, beskrivning och en bild på felet och skickar in den. Förvaltare tar emot och hanterar anmälningarna, ekonomi har läsande insyn. Portalen ska driftsättas säkert och med kontrollerad åtkomst, med lagring för dokument och bilder provisionerad som kod, och med ett automatiserat arbetsflöde mot Nordviks Microsoft 365.
 
-Nordvik är ett annat företag med andra behov än Novatrix. Samma Azure-tekniker som använts genom kursen (v34-v40) återanvänds som mönster, men datamodellen, rollerna och lösningen är medvetet omdesignade för Nordviks felanmälan, inte en namnbytt kopia av tidigare veckors lösningar.
+Samma Azure-tekniker som använts genom kursen återanvänds som mönster, men datamodellen, rollerna och lösningen är medvetet designade utifrån Nordviks egna behov.
 
 ## Innehåll
 
@@ -116,7 +116,7 @@ fa-20261005-091910-9b9388/anmalan.json
 
 ### Koden i `func-nordvik-portal`
 
-Koden ligger i [`portal/function_app.py`](portal/function_app.py). Tre rutter: `/` visar felanmälningsformuläret, `/skicka` tar emot det och skickar vidare server-till-server till `func-nordvik-arenden` (webbläsaren pratar aldrig direkt med den interna funktionen), `/mina-arenden` låter en hyresgäst skriva in sitt hyresgästnummer och se sina egna anmälningar. Inget inloggningssystem byggdes — kursen har aldrig byggt inloggning i en egen webbapp, så precis som Novatrix formulär är det här öppet, med hyresgästnumret som ett vanligt fält, inte en hemlighet. Design med eget mörkt tema, medvetet skild från Novatrix formulär.
+Koden ligger i [`portal/function_app.py`](portal/function_app.py). Tre rutter: `/` visar felanmälningsformuläret, `/skicka` tar emot det och skickar vidare server-till-server till `func-nordvik-arenden` (webbläsaren pratar aldrig direkt med den interna funktionen), `/mina-arenden` låter en hyresgäst skriva in sitt hyresgästnummer och se sina egna anmälningar. Inget inloggningssystem byggdes — kursen har aldrig byggt inloggning i en egen webbapp, så formuläret är öppet, med hyresgästnumret som ett vanligt fält, inte en hemlighet. Eget mörkt tema i designen.
 
 Förvaltare och ekonomi loggar inte in i appen alls, de arbetar istället i SharePoint-listan (se Delmoment 6), där deras Entra-grupper styr vad de får göra.
 
