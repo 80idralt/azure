@@ -133,10 +133,7 @@ foreach ($id in $resourceIds) {
 
 `--is-incremental` lägger till taggar utan att skriva över de som redan fanns.
 
-Två resurser krånglade:
-
-- **DNS-zonens VNet-länk** (`link-nordvik`) gick inte att tagga med `az resource tag` (den klagade på ett skrivskyddat fält den fick tillbaka från sig själv). Löst med det specifika kommandot istället: `az network private-dns link vnet update ... --tags ...`.
-- **Nätverkskortet** som hör till den privata endpointen gick inte att tagga alls: `(CannotModifyNicAttachedToPrivateEndpoint) ... It can not be modified by user.` Det är en Azure-begränsning: nätverkskort som skapas automatiskt av en privat endpoint är systemägda och får inte ändras av användaren, taggar inkluderat. Det är den enda resursen i lösningen som inte kunde taggas.
+**Ett undantag:** nätverkskortet som den privata endpointen skapar automatiskt går inte att tagga (`CannotModifyNicAttachedToPrivateEndpoint`). Det ägs av Azure och får inte ändras av användaren. Alla andra resurser är taggade.
 
 ## Delmoment 1: Compute
 
@@ -215,7 +212,7 @@ Tre roller, enligt least privilege:
 | `sg-nordvik-forvaltare` | Säkerhetsgrupp | RBAC mot lagringen, Members (redigera) på SharePoint-sajten | `836c0262-c307-4b2d-91fe-5c89dfb6c286` |
 | `sg-nordvik-ekonomi` | Säkerhetsgrupp | RBAC mot lagringen, Visitors (läsa) på SharePoint-sajten | `b11988a3-db82-4ca7-ab72-b0a960f1d752` |
 
-Planen var från början en grupp per roll som gjorde allt. Det stötte på en verklig begränsning: Azure tillåter bara säkerhetsaktiverade grupper i RBAC. En Microsoft 365-grupp är inte det som standard (`(GroupTypeNotSupported) Only security-enabled groups can be used in role assignments`). Därför finns separata säkerhetsgrupper för behörigheterna.
+Tanken var först att förvaltarna bara skulle ha en grupp, som både gav mejladressen och behörigheten till lagringen. Det gick inte. När gruppen skulle få sin roll i Azure kom felet `(GroupTypeNotSupported) Only security-enabled groups can be used in role assignments`. Azure delar bara ut roller till säkerhetsgrupper. En Microsoft 365-grupp är ingen säkerhetsgrupp. Därför har varje roll en egen säkerhetsgrupp för behörigheterna, medan Microsoft 365-gruppen bara står för SharePoint-sajten och mejlen.
 
 Ekonomi har ingen egen Microsoft 365-grupp. Uppgiften ber bara om läsande insyn, inte om en egen kanal eller mejladress, så ekonomi får istället läsbehörighet på förvaltarnas SharePoint-sajt.
 
@@ -491,7 +488,7 @@ Det vanliga mejlet och det akuta med hög prioritet och bilden bifogad:
 ![Vanligt mejl](images/mejl-vanligt.png)
 ![Akut mejl, hög prioritet, med bilden bifogad](images/mejl-akut.png)
 
-Flödets körningshistorik:
+Flödets körningshistorik, alla körningar under testdagen lyckades:
 
 ![Körningshistorik i Power Automate](images/flode-korningshistorik.png)
 
@@ -559,10 +556,3 @@ v41/
 │   └── nordvik-felanmalan-flow.json   Power Automate-flödets definition
 └── images/                            skärmbilder
 ```
-
-### Medvetna avgränsningar
-
-- **Ingen inloggning för hyresgäster.** Kursen har inte byggt inloggning i en egen webbapp. "Mina anmälningar" filtrerar på hyresgästnummer och är inte ett skydd. I skarp drift skulle Entra External ID användas.
-- **Utgående trafik begränsas inte** från compute-subnäten, eftersom funktionerna behöver nå DNS, Azure Monitor och Power Automate.
-- **Entra-grupper, SharePoint och Power Automate ligger utanför ARM-mallen**, eftersom de inte är Azure-resurser. Flödet versionshanteras ändå som en exporterad definition.
-- **Den privata endpointens nätverkskort saknar taggar.** Azure tillåter inte att det ändras.
