@@ -1,0 +1,466 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "swedencentral",
+      "metadata": {
+        "description": "Azure-region for alla resurser."
+      }
+    },
+    "forvaltareGroupId": {
+      "type": "string",
+      "metadata": {
+        "description": "Objekt-id for Entra-sakerhetsgruppen sg-nordvik-forvaltare, skapad utanfor mallen (Entra ar ingen Azure-resurs)."
+      }
+    },
+    "ekonomiGroupId": {
+      "type": "string",
+      "metadata": {
+        "description": "Objekt-id for Entra-sakerhetsgruppen sg-nordvik-ekonomi, skapad utanfor mallen."
+      }
+    },
+    "flowUrl": {
+      "type": "securestring",
+      "metadata": {
+        "description": "HTTP-triggerns URL for Power Automate-flodet Nordvik-felanmalan, skapat utanfor mallen."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "avdelning": "fastighetsforvaltning",
+        "kostnadsstalle": "nordvik-portal",
+        "fastighet": "gemensam"
+      },
+      "metadata": {
+        "description": "Gemensamma taggar for ekonomins kostnadsuppfoljning, satta pa alla resurser."
+      }
+    }
+  },
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id)]",
+    "dataStorageName": "[concat('stdata', variables('suffix'))]",
+    "funcStorageName": "[concat('stfunc', variables('suffix'))]",
+    "vnetName": "vnet-nordvik",
+    "subnetData": "snet-data",
+    "subnetApp": "snet-app",
+    "subnetFunc": "snet-func",
+    "privateDnsZoneName": "privatelink.blob.core.windows.net",
+    "privateEndpointName": "pe-nordvik-storage",
+    "anmalningarContainer": "anmalningar",
+    "dokumentContainer": "dokument",
+    "arendenDeployContainer": "deploy-arenden",
+    "portalDeployContainer": "deploy-portal",
+    "arendenFuncName": "[concat('func-nordvik-arenden-', variables('suffix'))]",
+    "portalFuncName": "[concat('func-nordvik-portal-', variables('suffix'))]",
+    "arendenPlanName": "[concat('plan-nordvik-arenden-', variables('suffix'))]",
+    "portalPlanName": "[concat('plan-nordvik-portal-', variables('suffix'))]",
+    "blobDataContributorRoleId": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
+    "blobDataReaderRoleId": "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1",
+    "anmalningarScope": "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStorageName'), 'default', variables('anmalningarContainer'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('vnetName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "addressSpace": { "addressPrefixes": ["10.0.0.0/16"] },
+        "subnets": [
+          {
+            "name": "[variables('subnetData')]",
+            "properties": {
+              "addressPrefix": "10.0.1.0/24",
+              "privateEndpointNetworkPolicies": "Disabled"
+            }
+          },
+          {
+            "name": "[variables('subnetApp')]",
+            "properties": {
+              "addressPrefix": "10.0.2.0/27",
+              "delegations": [
+                {
+                  "name": "nordvik-app-delegation",
+                  "properties": { "serviceName": "Microsoft.App/environments" }
+                }
+              ]
+            }
+          },
+          {
+            "name": "[variables('subnetFunc')]",
+            "properties": {
+              "addressPrefix": "10.0.3.0/27",
+              "delegations": [
+                {
+                  "name": "nordvik-func-delegation",
+                  "properties": { "serviceName": "Microsoft.App/environments" }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('dataStorageName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "sku": { "name": "Standard_LRS" },
+      "kind": "StorageV2",
+      "properties": {
+        "accessTier": "Hot",
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false,
+        "networkAcls": {
+          "defaultAction": "Deny",
+          "bypass": "None"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-01-01",
+      "name": "[concat(variables('dataStorageName'), '/default/', variables('anmalningarContainer'))]",
+      "dependsOn": ["[resourceId('Microsoft.Storage/storageAccounts', variables('dataStorageName'))]"],
+      "properties": { "publicAccess": "None" }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-01-01",
+      "name": "[concat(variables('dataStorageName'), '/default/', variables('dokumentContainer'))]",
+      "dependsOn": ["[resourceId('Microsoft.Storage/storageAccounts', variables('dataStorageName'))]"],
+      "properties": { "publicAccess": "None" }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/managementPolicies",
+      "apiVersion": "2023-01-01",
+      "name": "[concat(variables('dataStorageName'), '/default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStorageName'), 'default', variables('dokumentContainer'))]"
+      ],
+      "properties": {
+        "policy": {
+          "rules": [
+            {
+              "enabled": true,
+              "name": "dokument-till-cool",
+              "type": "Lifecycle",
+              "definition": {
+                "filters": {
+                  "blobTypes": ["blockBlob"],
+                  "prefixMatch": ["dokument/"]
+                },
+                "actions": {
+                  "baseBlob": {
+                    "tierToCool": { "daysAfterModificationGreaterThan": 90 }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "[variables('privateDnsZoneName')]",
+      "location": "global",
+      "tags": "[parameters('tags')]"
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[concat(variables('privateDnsZoneName'), '/link-nordvik')]",
+      "location": "global",
+      "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', variables('privateDnsZoneName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": { "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]" }
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('privateEndpointName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStorageName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "subnet": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetData'))]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "pe-nordvik-storage-koppling",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStorageName'))]",
+              "groupIds": ["blob"]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[concat(variables('privateEndpointName'), '/default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones', variables('privateDnsZoneName'))]"
+      ],
+      "properties": {
+        "privateDnsZoneConfigs": [
+          {
+            "name": "blob",
+            "properties": { "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', variables('privateDnsZoneName'))]" }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('funcStorageName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "sku": { "name": "Standard_LRS" },
+      "kind": "StorageV2",
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-01-01",
+      "name": "[concat(variables('funcStorageName'), '/default/', variables('arendenDeployContainer'))]",
+      "dependsOn": ["[resourceId('Microsoft.Storage/storageAccounts', variables('funcStorageName'))]"]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-01-01",
+      "name": "[concat(variables('funcStorageName'), '/default/', variables('portalDeployContainer'))]",
+      "dependsOn": ["[resourceId('Microsoft.Storage/storageAccounts', variables('funcStorageName'))]"]
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('arendenFuncName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "kind": "web",
+      "properties": { "Application_Type": "web" }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('portalFuncName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "kind": "web",
+      "properties": { "Application_Type": "web" }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('arendenPlanName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "sku": { "name": "FC1", "tier": "FlexConsumption" },
+      "properties": { "reserved": true }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('portalPlanName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "sku": { "name": "FC1", "tier": "FlexConsumption" },
+      "properties": { "reserved": true }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2024-04-01",
+      "name": "[variables('arendenFuncName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "kind": "functionapp,linux",
+      "identity": { "type": "SystemAssigned" },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('arendenPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('funcStorageName'), 'default', variables('arendenDeployContainer'))]",
+        "[resourceId('Microsoft.Insights/components', variables('arendenFuncName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('arendenPlanName'))]",
+        "virtualNetworkSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetFunc'))]",
+        "functionAppConfig": {
+          "deployment": {
+            "storage": {
+              "type": "blobContainer",
+              "value": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('funcStorageName')), '2023-01-01').primaryEndpoints.blob, variables('arendenDeployContainer'))]",
+              "authentication": { "type": "StorageAccountConnectionString", "storageAccountConnectionStringName": "DEPLOYMENT_STORAGE_CONNECTION_STRING" }
+            }
+          },
+          "runtime": { "name": "python", "version": "3.11" },
+          "scaleAndConcurrency": { "maximumInstanceCount": 100, "instanceMemoryMB": 2048 }
+        },
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "DEPLOYMENT_STORAGE_CONNECTION_STRING",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('funcStorageName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('funcStorageName')), '2023-01-01').keys[0].value)]"
+            },
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('funcStorageName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('funcStorageName')), '2023-01-01').keys[0].value)]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('arendenFuncName')), '2020-02-02').ConnectionString]"
+            },
+            { "name": "STORAGE_ACCOUNT", "value": "[variables('dataStorageName')]" },
+            { "name": "FLOW_URL", "value": "[parameters('flowUrl')]" }
+          ],
+          "ipSecurityRestrictions": [
+            {
+              "vnetSubnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetApp'))]",
+              "action": "Allow",
+              "priority": 100,
+              "name": "allow-portal"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2024-04-01",
+      "name": "[variables('portalFuncName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "kind": "functionapp,linux",
+      "identity": { "type": "SystemAssigned" },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('portalPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('funcStorageName'), 'default', variables('portalDeployContainer'))]",
+        "[resourceId('Microsoft.Insights/components', variables('portalFuncName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+        "[resourceId('Microsoft.Web/sites', variables('arendenFuncName'))]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('portalPlanName'))]",
+        "virtualNetworkSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetApp'))]",
+        "functionAppConfig": {
+          "deployment": {
+            "storage": {
+              "type": "blobContainer",
+              "value": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('funcStorageName')), '2023-01-01').primaryEndpoints.blob, variables('portalDeployContainer'))]",
+              "authentication": { "type": "StorageAccountConnectionString", "storageAccountConnectionStringName": "DEPLOYMENT_STORAGE_CONNECTION_STRING" }
+            }
+          },
+          "runtime": { "name": "python", "version": "3.11" },
+          "scaleAndConcurrency": { "maximumInstanceCount": 100, "instanceMemoryMB": 2048 }
+        },
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "DEPLOYMENT_STORAGE_CONNECTION_STRING",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('funcStorageName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('funcStorageName')), '2023-01-01').keys[0].value)]"
+            },
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('funcStorageName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('funcStorageName')), '2023-01-01').keys[0].value)]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('portalFuncName')), '2020-02-02').ConnectionString]"
+            },
+            { "name": "STORAGE_ACCOUNT", "value": "[variables('dataStorageName')]" },
+            { "name": "ARENDEN_URL", "value": "[concat('https://', reference(resourceId('Microsoft.Web/sites', variables('arendenFuncName'))).defaultHostName, '/api/arenden')]" }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(variables('anmalningarScope'), variables('arendenFuncName'), variables('blobDataContributorRoleId'))]",
+      "scope": "[concat('Microsoft.Storage/storageAccounts/', variables('dataStorageName'), '/blobServices/default/containers/', variables('anmalningarContainer'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('arendenFuncName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStorageName'), 'default', variables('anmalningarContainer'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('blobDataContributorRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('arendenFuncName')), '2024-04-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(variables('anmalningarScope'), variables('portalFuncName'), variables('blobDataReaderRoleId'))]",
+      "scope": "[concat('Microsoft.Storage/storageAccounts/', variables('dataStorageName'), '/blobServices/default/containers/', variables('anmalningarContainer'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('portalFuncName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStorageName'), 'default', variables('anmalningarContainer'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('blobDataReaderRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('portalFuncName')), '2024-04-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(variables('anmalningarScope'), parameters('forvaltareGroupId'), variables('blobDataContributorRoleId'))]",
+      "scope": "[concat('Microsoft.Storage/storageAccounts/', variables('dataStorageName'), '/blobServices/default/containers/', variables('anmalningarContainer'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStorageName'), 'default', variables('anmalningarContainer'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('blobDataContributorRoleId'))]",
+        "principalId": "[parameters('forvaltareGroupId')]",
+        "principalType": "Group"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(variables('anmalningarScope'), parameters('ekonomiGroupId'), variables('blobDataReaderRoleId'))]",
+      "scope": "[concat('Microsoft.Storage/storageAccounts/', variables('dataStorageName'), '/blobServices/default/containers/', variables('anmalningarContainer'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStorageName'), 'default', variables('anmalningarContainer'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('blobDataReaderRoleId'))]",
+        "principalId": "[parameters('ekonomiGroupId')]",
+        "principalType": "Group"
+      }
+    }
+  ],
+  "outputs": {
+    "dataStorageName": { "type": "string", "value": "[variables('dataStorageName')]" },
+    "funcStorageName": { "type": "string", "value": "[variables('funcStorageName')]" },
+    "arendenFuncName": { "type": "string", "value": "[variables('arendenFuncName')]" },
+    "portalFuncName": { "type": "string", "value": "[variables('portalFuncName')]" },
+    "portalUrl": { "type": "string", "value": "[concat('https://', reference(resourceId('Microsoft.Web/sites', variables('portalFuncName'))).defaultHostName, '/')]" }
+  }
+}

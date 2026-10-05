@@ -19,8 +19,8 @@ Nordvik är ett annat företag med andra behov än Novatrix. Samma Azure-teknike
 Allt för examinationen ligger i mappen `v41`. Strukturen byggs upp delmoment för delmoment:
 
 - [ ] Del A: Dokumentation av centrala tjänster och virtualiseringsnivåer
-- [ ] Delmoment 1: Compute - värdmiljö och felanmälningsformulär
-- [ ] Delmoment 2: IAM - roller för hyresgäst, förvaltare, ekonomi
+- [x] Delmoment 1: Compute - värdmiljö och felanmälningsformulär
+- [x] Delmoment 2: IAM - roller för hyresgäst, förvaltare, ekonomi
 - [x] Delmoment 3: Nätverk och säkerhet - defense in depth
 - [x] Delmoment 4: Storage - säker lagring för anmälningar och bilder
 - [ ] Delmoment 5: IaC - ARM-templates, versionshanterat
@@ -341,3 +341,29 @@ Lifecycle-policyn som sköter flytten till Cool ligger som kod i [`storage/lifec
 ```
 az storage account management-policy create --account-name stnordvik80idralt02 --resource-group rg-nordvik --policy @v41/storage/lifecycle-policy.json
 ```
+
+## Delmoment 5: IaC
+
+Allt som byggdes för hand ovan (nätverk, lagring, de två funktionerna, RBAC-rollerna) beskrivs nu som kod i [`templates/azuredeploy.json`](templates/azuredeploy.json), i ren ARM-JSON som i v38, med en tillhörande [`templates/azuredeploy.parameters.json`](templates/azuredeploy.parameters.json).
+
+### Vad som är med, och vad som inte är det
+
+Mallen beskriver allt i Azure: VNet med de tre subnäten, båda lagringskontona med containrar och lifecycle-policyn, den privata DNS-zonen och endpointen, de två Function-apparna (Flex Consumption, VNet-integrerade, nätverksbegränsningen på `func-nordvik-arenden`) och de fyra RBAC-rolltilldelningarna.
+
+**Inte med:** Entra-grupperna (`sg-nordvik-forvaltare`, `sg-nordvik-ekonomi`, `Nordvik-Forvaltare`), SharePoint-listan och Power Automate-flödet. De är inte Azure-resurser och kan inte beskrivas i en ARM-mall, precis som konstaterat i Storage- och Automation-delmomenten. Grupp-ID:na tas istället in som parametrar (`forvaltareGroupId`, `ekonomiGroupId`), så mallen vet vem som ska få vilken roll utan att själv skapa grupperna.
+
+### Namngivning i mallen
+
+Istället för handvalda namn (som krockade och behövde höjt löpnummer, se Storage-delmomentet) används `uniqueString(resourceGroup().id)`, samma mönster som v38/v40. Den som klonar repot kan köra mallen utan att själv behöva hitta på unika namn.
+
+### En hemlighet som aldrig får hamna i repot
+
+Power Automate-flödets URL innehåller en inbyggd signatur, i praktiken en nyckel till flödet. Repot är publikt, så den får aldrig committas. `flowUrl` är deklarerad som `securestring` i mallen (loggas inte i klartext av Azure), och `azuredeploy.parameters.json` innehåller bara en platshållare. [`deploy.ps1`](deploy.ps1) frågar efter den riktiga URL:en interaktivt vid varje körning istället.
+
+### Skripten
+
+[`deploy.ps1`](deploy.ps1) skapar resursgruppen, kör mallen, och publicerar sedan koden i båda funktionerna (`func azure functionapp publish`), med samma återförsöksmönster som v40 byggde för att hantera att RBAC-rollerna kan ta en minut att slå igenom. [`destroy.ps1`](destroy.ps1) river hela resursgruppen.
+
+### Byggd från mallen, riktig rivning och återuppbyggnad
+
+*Verifieras i nästa steg: hela `rg-nordvik` rivs och byggs upp på nytt helt och hållet från mallen, för att bevisa att den faktiskt fungerar, inte bara att den är syntaktiskt giltig.*
