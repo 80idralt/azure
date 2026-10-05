@@ -24,7 +24,7 @@ Allt för examinationen ligger i mappen `v41`. Strukturen byggs upp delmoment f�
 - [x] Delmoment 3: Nätverk och säkerhet - defense in depth
 - [x] Delmoment 4: Storage - säker lagring för anmälningar och bilder
 - [ ] Delmoment 5: IaC - ARM-templates, versionshanterat
-- [ ] Delmoment 6: Automation och integration - Power Automate mot SharePoint/Teams
+- [x] Delmoment 6: Automation och integration - Power Automate mot SharePoint/Outlook
 - [ ] Delmoment 7: Dokumentation - hur lösningen planerats, implementerats och kan återskapas
 
 ## Namngivning
@@ -221,7 +221,34 @@ Samma lista, två behörighetsnivåer, ingen dubblett av datan. Hyresgäster har
 
 ### Power Automate-flödet
 
-*Byggs i nästa steg: HTTP-trigger från `func-nordvik-arenden` → SharePoint-rad i `Felanmalningar` → Outlook-mejl till `Nordvik-Forvaltare`s gruppadress → om akut, ytterligare ett mejl märkt brådskande.*
+Flödet `Nordvik-felanmalan` triggas av en **HTTP-begäran** (anonym, "vem som helst med URL:en" — `func-nordvik-arenden` postar dit efter att anmälan sparats). Tre steg efter triggern:
+
+1. **Skapa objekt** i `Felanmalningar`-listan, alla fält kopplade mot triggerns JSON.
+2. **Skicka ett e-postmeddelande (V2)** till `nordvik-forvaltare@Altun1980.onmicrosoft.com`, alltid.
+3. **Villkor:** om `akut` är sant, ett andra mejl till samma adress, markerat **Hög prioritet**, med ämnet "AKUT FELANMÄLAN: ...".
+
+Flödets URL sparades som app-settingen `FLOW_URL` på `func-nordvik-arenden` (via Azure Portal, eftersom `&`-tecknen i adressen tolkades som kommandoavskiljare av PowerShell/cmd när den sattes via `az`).
+
+### Verifierat end-to-end
+
+Ett riktigt test via portalen (kategori "varme", en akut kategori):
+
+![Bekräftelse i portalen](images/felanmalan-skickad.png)
+
+Posten dök upp i SharePoint-listan:
+
+![Rad i Felanmalningar](images/sharepoint-lista.png)
+
+Och två mejl kom fram till `Nordvik-Forvaltare`s inkorg, det vanliga och det akuta (med hög prioritet, utropstecknet i listvyn):
+
+![Vanligt mejl](images/mejl-vanligt.png)
+![Akut mejl, hög prioritet](images/mejl-akut.png)
+
+Flödets egen körningshistorik bekräftar samma sak, en lyckad körning på 3 sekunder:
+
+![Körningshistorik i Power Automate](images/flode-korningshistorik.png)
+
+Hela kedjan bevisad: portal → intern funktion → lagring → Power Automate → SharePoint + två mejl.
 
 ## Delmoment 3: Nätverk och säkerhet
 
