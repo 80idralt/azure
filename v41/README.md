@@ -74,21 +74,48 @@ az functionapp config access-restriction add --resource-group rg-nordvik --name 
 Tre roller, enligt least privilege:
 
 - **Hyresgäst:** ingen egen Entra-identitet. Loggar in i appen med ett hyresgästnummer (mot en egen liten lista, inte Entra ID), hyresgästnumret bär med sig vilken fastighet/lägenhet personen hör till. Appen visar bara den inloggade hyresgästens egna anmälningar. En skarp lösning med 5500 externa hyresgäster hade använt Entra External ID/B2C, men det är inget kursen gått igenom, så det är en medveten avgränsning.
-- **Förvaltare** och **Ekonomi:** riktiga Entra-identiteter, en grupp var. Grupperna är satta upp som **Microsoft 365-grupper** istället för vanliga säkerhetsgrupper, så en och samma grupp ger tre saker: en RBAC-roll mot rätt container i lagringskontot, en egen Teams-kanal som tar emot notiser, och en mejladress dit det akuta mejlet går. Förvaltare och ekonomi loggar in i portalen med sina riktiga Entra-konton, och appen styr vad de får göra utifrån gruppmedlemskapet.
+- **Förvaltare** och **Ekonomi:** riktiga Entra-identiteter. Varje roll representeras av **två grupper** med varsitt syfte, inte en enda grupp som gör allt:
+  - `Nordvik-Forvaltare` / `Nordvik-Ekonomi` — **Microsoft 365-grupper**, skapade för att få en Teams-kanal (notiser) och en mejladress (det akuta mejlet) på köpet.
+  - `sg-nordvik-forvaltare` / `sg-nordvik-ekonomi` — vanliga **säkerhetsgrupper**, används för RBAC mot lagringen och för inloggningen i portalen.
 
-Grupperna skapades med PowerShell-modulen MicrosoftTeams (`New-Team`), inte `az ad group create`, eftersom den bara skapar en vanlig säkerhetsgrupp utan Team och mejladress:
+  Planen var från början en enda grupp som gjorde allt tre. Det stötte på en verklig begränsning: Azure tillåter bara säkerhetsaktiverade grupper i RBAC-rolltilldelningar, och en Microsoft 365-grupp är det inte som standard (`(GroupTypeNotSupported) Only security-enabled groups can be used in role assignments`). Att göra en grupp till både Microsoft 365-grupp och säkerhetsaktiverad på samma gång går bara via direkta Microsoft Graph-anrop, långt utanför kursens verktyg, så lösningen blev två grupper per roll istället för en.
+
+Microsoft 365-grupperna, skapade med PowerShell-modulen MicrosoftTeams:
 
 ```
 $forvaltare = New-Team -DisplayName "Nordvik-Forvaltare" -MailNickName "nordvik-forvaltare" -Visibility Private -Description "Förvaltare, hanterar felanmälningar"
 $ekonomi = New-Team -DisplayName "Nordvik-Ekonomi" -MailNickName "nordvik-ekonomi" -Visibility Private -Description "Ekonomi, läsande insyn i felanmälningar"
 ```
 
-| Grupp | Group ID |
-|---|---|
-| `Nordvik-Forvaltare` | `82f89c0e-2ccd-4a4b-a273-b633e2cd2805` |
-| `Nordvik-Ekonomi` | `292b7363-2955-43ae-859f-fd2ad29d0605` |
+Säkerhetsgrupperna, skapade med `az ad group create` (ger `securityEnabled: true` per automatik, till skillnad från `New-Team`):
 
-RBAC-rolltilldelningarna läggs på när lagringen och funktionerna finns på plats.
+```
+az ad group create --display-name "sg-nordvik-forvaltare" --mail-nickname "sgnordvikforvaltare"
+az ad group create --display-name "sg-nordvik-ekonomi" --mail-nickname "sgnordvikekonomi"
+```
+
+| Grupp | Syfte | ID |
+|---|---|---|
+| `Nordvik-Forvaltare` | Teams + mejl | `82f89c0e-2ccd-4a4b-a273-b633e2cd2805` |
+| `Nordvik-Ekonomi` | Teams + mejl | `292b7363-2955-43ae-859f-fd2ad29d0605` |
+| `sg-nordvik-forvaltare` | RBAC + inloggning | `836c0262-c307-4b2d-91fe-5c89dfb6c286` |
+| `sg-nordvik-ekonomi` | RBAC + inloggning | `b11988a3-db82-4ca7-ab72-b0a960f1d752` |
+
+RBAC-rolltilldelningarna, scopade till `anmalningar`-containern, inte hela kontot:
+
+```
+$scope = "/subscriptions/4dd214c0-94b5-48db-8f8c-efe2cf8e2f20/resourceGroups/rg-nordvik/providers/Microsoft.Storage/storageAccounts/stnordvik80idralt02/blobServices/default/containers/anmalningar"
+
+az role assignment create --assignee 836c0262-c307-4b2d-91fe-5c89dfb6c286 --role "Storage Blob Data Contributor" --scope $scope
+az role assignment create --assignee b11988a3-db82-4ca7-ab72-b0a960f1d752 --role "Storage Blob Data Reader" --scope $scope
+```
+
+Funktionernas egna hanterade identiteter fick samma behandling, också scopat till `anmalningar`:
+
+| Identitet | Roll |
+|---|---|
+| `func-nordvik-arenden` (system-assigned) | Storage Blob Data Contributor — sparar anmälningar |
+| `func-nordvik-portal` (system-assigned) | Storage Blob Data Reader — visar listor, skriver aldrig direkt |
 
 ## Delmoment 3: Nätverk och säkerhet
 
