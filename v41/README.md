@@ -67,7 +67,28 @@ az functionapp config access-restriction add --resource-group rg-nordvik --name 
 ]
 ```
 
-*Kod, inloggning (Easy Auth) och koppling mot lagringen (hanterad identitet, RBAC) byggs i nästa steg.*
+### Koden i `func-nordvik-arenden`
+
+Koden ligger i [`arenden/function_app.py`](arenden/function_app.py). Den tar emot rubrik, beskrivning, kategori, fastighet och hyresgästnummer, bygger ett eget id (`fa-åååmmdd-ttmmss-slump`, egen prefix så det inte liknar v40:s `arende-`), sparar en JSON-fil plus en eventuell bild i containern `anmalningar`, och postar vidare till Power Automate när flödet finns. Tidpunkten sparas läsbart som `2026-10-05:09:19` istället för en svårläst ISO-tidsstämpel.
+
+Testat med curl, samma sätt som tidigare veckor:
+
+```
+PS> curl.exe -i -X POST -F "rubrik=Trasig kran" -F "beskrivning=Droppar konstant i koket" -F "kategori=vatten" -F "fastighet=Fastighet 12" -F "hyresgast=HG-1042" "https://func-nordvik-arenden.azurewebsites.net/api/arenden"
+HTTP/1.1 200 OK
+<h1>Tack för din anmälan</h1><p>Ditt ärende är sparat med id fa-20261005-091910-9b9388, mottaget 2026-10-05:09:19.</p>
+```
+
+Lagringskontot och funktionen är båda stängda för publik åtkomst, så för att se filen krävdes ett tillfälligt undantag (eget IP), borttaget direkt efter kontrollen:
+
+```
+PS> az storage blob list --account-name stnordvik80idralt02 --container-name anmalningar --auth-mode key --query "[].name" -o table
+Result
+--------------------------------------
+fa-20261005-091910-9b9388/anmalan.json
+```
+
+*Inloggning (Easy Auth) och `func-nordvik-portal` byggs i nästa steg.*
 
 ## Delmoment 2: IAM
 
