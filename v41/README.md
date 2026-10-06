@@ -663,9 +663,31 @@ fa-20261005-115457-2ae8aa/anmalan.json
 
 **En gång, utanför Azure:**
 
-1. Skapa grupperna enligt Delmoment 2 och för in säkerhetsgruppernas ID:n i `templates/azuredeploy.parameters.json`.
-2. Skapa SharePoint-listan `Felanmalningar` med kolumnerna i Delmoment 6 och sätt behörigheterna enligt Delmoment 2.
-3. Bygg flödet efter definitionen i `automation/nordvik-felanmalan-flow.json`, publicera det och kopiera HTTP-URL:en från triggern.
+**1. Grupperna.** Skapa förvaltarnas Microsoft 365-grupp med Team (kräver PowerShell-modulen MicrosoftTeams och `Connect-MicrosoftTeams`) och de två säkerhetsgrupperna:
+
+```powershell
+New-Team -DisplayName "Nordvik-Forvaltare" -MailNickName "nordvik-forvaltare" -Visibility Private -Description "Förvaltare, hanterar felanmälningar"
+
+az ad group create --display-name "sg-nordvik-forvaltare" --mail-nickname "sgnordvikforvaltare"
+az ad group create --display-name "sg-nordvik-ekonomi" --mail-nickname "sgnordvikekonomi"
+```
+
+Hämta säkerhetsgruppernas ID:n och för in dem som `forvaltareGroupId` och `ekonomiGroupId` i `templates/azuredeploy.parameters.json`:
+
+```powershell
+az ad group show --group "sg-nordvik-forvaltare" --query id -o tsv
+az ad group show --group "sg-nordvik-ekonomi" --query id -o tsv
+```
+
+Lägg sedan förvaltarna i `sg-nordvik-forvaltare` och ekonomipersonalen i `sg-nordvik-ekonomi`, under Entra ID → Grupper → Medlemmar.
+
+**2. SharePoint-listan.** Öppna förvaltarnas sajt (Teams → Nordvik-Forvaltare → Filer → Öppna i SharePoint) och skapa en ny lista med namnet `Felanmalningar` och kolumnerna i tabellen under Delmoment 6.
+
+**3. Listans behörigheter.** På sajten: Inställningar → Webbplatsbehörigheter → Avancerade behörighetsinställningar:
+- Öppna **Nordvik-Forvaltare Members** och lägg till `sg-nordvik-forvaltare`.
+- Öppna **Nordvik-Forvaltare Visitors** och lägg till `sg-nordvik-ekonomi`.
+
+**4. Flödet.** Skapa ett nytt flöde i Power Automate med triggern **När en HTTP-begäran tas emot**, satt till "Vem som helst". Bygg stegen enligt `automation/nordvik-felanmalan-flow.json`: Skapa objekt, Välj, Skicka e-postmeddelande, Publicera kort och Villkor med akutmejlet. Klicka **Publicera** och kopiera HTTP-URL:en från triggern. Den behövs när `deploy.ps1` körs.
 
 **Azure-miljön:**
 
