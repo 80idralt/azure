@@ -59,5 +59,13 @@ function Publish-MedForsok($funcName, $mappsokvag) {
 Publish-UtanHalsokontroll $out.arendenFuncName.value "$scriptDir\arenden"
 Publish-MedForsok $out.portalFuncName.value "$scriptDir\portal"
 
+# Azure skapar egna larmregler for Application Insights efter mallen har kort,
+# de far inga taggar fran mallen och taggas darfor har i efterhand.
+$taggar = $parametrar.parameters.tags.value.PSObject.Properties | ForEach-Object { "$($_.Name)=$($_.Value)" }
+$otaggade = az resource list --resource-group $ResourceGroup --query "[?tags.kostnadsstalle == null].id" -o tsv
+foreach ($id in $otaggade) {
+    az resource tag --ids $id --tags $taggar --is-incremental | Out-Null
+}
+
 Write-Host ""
 Write-Host "Klart. Portalen finns pa:" $out.portalUrl.value

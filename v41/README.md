@@ -147,7 +147,39 @@ foreach ($id in $resourceIds) {
 
 `--is-incremental` lägger till taggar utan att skriva över de som redan fanns.
 
-**Ett undantag:** nätverkskortet som den privata endpointen skapar automatiskt går inte att tagga (`CannotModifyNicAttachedToPrivateEndpoint`). Det ägs av Azure och får inte ändras av användaren. Alla andra resurser är taggade.
+Två saker visade sig när miljön byggdes från mallen:
+
+- **Nätverkskortet** som den privata endpointen skapar går inte att tagga i efterhand (`CannotModifyNicAttachedToPrivateEndpoint`), vilket stoppade svepet i den handbyggda versionen. När mallen skapar endpointen ärver nätverkskortet däremot taggarna direkt.
+- **Larmreglerna** som Azure skapar automatiskt för Application Insights (`Failure Anomalies` och `Application Insights Smart Detection`) dyker upp först efter att mallen kört och får inga taggar. `deploy.ps1` avslutar därför med att tagga allt i resursgruppen som saknar taggar, med samma värden som i parameterfilen.
+
+Resultatet är att alla resurser i resursgruppen är taggade:
+
+```
+PS> az resource list --resource-group rg-nordvik --query "[].{namn:name, kostnadsstalle:tags.kostnadsstalle}" -o table
+Namn                                                         Kostnadsstalle
+-----------------------------------------------------------  ----------------
+stdatau622wnde7uy7i                                          nordvik-portal
+stfuncu622wnde7uy7i                                          nordvik-portal
+func-nordvik-arenden-u622wnde7uy7i                           nordvik-portal
+func-nordvik-portal-u622wnde7uy7i                            nordvik-portal
+nsg-nordvik-data                                             nordvik-portal
+privatelink.blob.core.windows.net                            nordvik-portal
+plan-nordvik-portal-u622wnde7uy7i                            nordvik-portal
+nsg-nordvik-func                                             nordvik-portal
+nsg-nordvik-app                                              nordvik-portal
+plan-nordvik-arenden-u622wnde7uy7i                           nordvik-portal
+vnet-nordvik                                                 nordvik-portal
+pe-nordvik-storage                                           nordvik-portal
+func-nordvik-arenden-u622wnde7uy7i                           nordvik-portal
+privatelink.blob.core.windows.net/link-nordvik               nordvik-portal
+pe-nordvik-storage.nic.2387ccd2-98e1-4167-b1d6-97082f8367b9  nordvik-portal
+func-nordvik-portal-u622wnde7uy7i                            nordvik-portal
+Application Insights Smart Detection                         nordvik-portal
+Failure Anomalies - func-nordvik-arenden-u622wnde7uy7i       nordvik-portal
+Failure Anomalies - func-nordvik-portal-u622wnde7uy7i        nordvik-portal
+```
+
+Funktionsnamnen står två gånger eftersom varje funktion har en Application Insights-komponent med samma namn.
 
 ### Så använder ekonomi taggarna
 
@@ -316,6 +348,24 @@ Inloggad i SharePoint ser `Test Forvaltare` fullt verktygsfält (Nytt, Redigera,
 
 ![Ekonomi är skrivskyddad](images/sharepoint-ekonomi-readonly.png)
 
+### Verifierat i Azure-portalen
+
+Samma testkonton inloggade i Azure-portalen.
+
+`Test Forvaltare` ser inga resursgrupper och inga kostnader. Förvaltarnas roll gäller bara filerna i `anmalningar`-containern, inte infrastrukturen.
+
+`Test Ekonomi` ser kostnaden för `rg-nordvik`, grupperad per tagg:
+
+![Ekonomi ser kostnaden för rg-nordvik](images/ekonomi-kostnad-rg.png)
+
+Men inte kostnaderna för resten av prenumerationen, eftersom rollen bara gäller Nordviks resursgrupp:
+
+![Ekonomi nekas på prenumerationen](images/ekonomi-nekad-prenumeration.png)
+
+Ekonomi ser resursgruppen men inga resurser i den. Ett försök att ta bort resursgruppen nekas:
+
+![Ekonomi får inte ta bort resursgruppen](images/ekonomi-nekad-radera.png)
+
 ## Delmoment 3: Nätverk och säkerhet
 
 Lagringen ska inte vara publikt åtkomlig. Lösningen är ett virtuellt nätverk med en **privat endpoint**, en egen ingång till lagringskontot som bara syns inifrån nätverket, i kombination med en **privat DNS-zon** som gör att kontots namn slår upp till en privat adress för den som frågar inifrån nätverket.
@@ -388,6 +438,16 @@ snet-func  .../networkSecurityGroups/nsg-nordvik-func  Disabled
 | Identitet | Hanterade identiteter utan lösenord, RBAC scopad till en container |
 | Hemligheter | Flödets URL finns aldrig i repot (se Delmoment 5) |
 
+Testat utifrån, från en vanlig dator med ägarkontot. Både lagringen och den interna funktionen säger nej:
+
+```
+PS> az storage blob list --account-name stdatau622wnde7uy7i --container-name anmalningar --auth-mode login -o table
+The request may be blocked by network rules of storage account.
+
+PS> curl.exe -i -X POST "https://func-nordvik-arenden-u622wnde7uy7i.azurewebsites.net/api/arenden"
+HTTP/1.1 403 Ip Forbidden
+```
+
 ## Delmoment 4: Storage
 
 Felanmälningar har två sorters innehåll med olika livslängd. Bilderna som hör till en anmälan läses ofta i början, medan kontrakt och besiktningsprotokoll läses sällan efter de första tre månaderna. De ligger därför i varsin container med olika regler.
@@ -412,6 +472,15 @@ Lifecycle-policyn ligger som kod i [`storage/lifecycle-policy.json`](storage/lif
 
 ```
 az storage account management-policy create --account-name stnordvik80idralt02 --resource-group rg-nordvik --policy @v41/storage/lifecycle-policy.json
+```
+
+Samma regel finns inbyggd i ARM-mallen. Azure går igenom den ungefär en gång per dygn och flyttar filer i `dokument/` som inte ändrats på över 90 dagar. Filen behåller namn och adress, bara priset ändras. Verifierat i den deployade miljön:
+
+```
+PS> az storage account management-policy show --account-name stdatau622wnde7uy7i --resource-group rg-nordvik --query "policy.rules[].{namn:name, prefix:definition.filters.prefixMatch[0], dagar:definition.actions.baseBlob.tierToCool.daysAfterModificationGreaterThan}" -o table
+Namn                Prefix     Dagar
+------------------  ---------  -------
+dokument-till-cool  dokument/  90.0
 ```
 
 Funktionernas egen drift (kodpaket, loggar) ligger i ett **separat** lagringskonto. Affärsdatan kan då låsas hårt utan att funktionernas drift påverkas. Funktionerna kan också rivas och byggas om medan anmälningarna ligger kvar.
