@@ -106,6 +106,20 @@ Nordviks krav pekar alla åt samma håll:
 
 **Bortvalt:** En VM hade krävt minst två maskiner och en lastbalanserare för att tåla att en faller bort och hade kostat pengar dygnet runt. En container löser mer av det, men kräver fortfarande att man själv bygger och underhåller avbilder och sätter upp skalning. För en portal som i grunden tar emot ett formulär och sparar det är serverless den enklaste och billigaste lösningen som uppfyller alla krav.
 
+### Kostnad för portalmiljön
+
+Ungefärlig månadskostnad med Nordviks trafik:
+
+| Del | Kostnad |
+|---|---|
+| Funktionerna | Nära 0 kr. Även toppar på hundratals anmälningar i timmen ryms i den mängd körningar som ingår gratis varje månad. Natten kostar ingenting. |
+| Privat endpoint | Runt 80 kr. Den största fasta kostnaden, oberoende av trafik. Det är priset för att lagringen inte är publik. |
+| Lagring, privat DNS-zon, Application Insights | Några kronor |
+
+Totalt runt 100 kr i månaden. Det mesta är säkerhet, inte trafik. Siffrorna är uppskattningar. Den faktiska kostnaden följer ekonomi i Cost Management (se Taggning).
+
+**Avvägning:** efter en stund utan trafik tar första anropet några sekunder längre, eftersom en instans måste startas (cold start). Det märks till exempel första anmälan på morgonen, inte under toppar. Det går att undvika med en instans som alltid är igång, men den kostar dygnet runt och går emot kravet att inte betala för stillastående kapacitet.
+
 ## Namngivning
 
 Följer kursens namnmönster typ-företag-syfte, t.ex. `rg-nordvik`, `vnet-nordvik`, `func-nordvik-portal`. Storage account: `stnordvik80idralt02` (typ + företag + användarnamn + löpnummer, `01` var redan taget globalt så löpnumret höjdes).
@@ -386,6 +400,8 @@ az storage account management-policy create --account-name stnordvik80idralt02 -
 
 Funktionernas egen drift (kodpaket, loggar) ligger i ett **separat** lagringskonto. Affärsdatan kan då låsas hårt utan att funktionernas drift påverkas. Funktionerna kan också rivas och byggas om medan anmälningarna ligger kvar.
 
+**Tillgänglighet i skarp drift:** lagringskontona använder `Standard_LRS`, där alla kopior av datan ligger i ett och samma datacenter. Det räcker för den här demomiljön. Funktionerna tål att en instans faller bort, men om just det datacentret får problem kan de inte spara anmälningar. I skarp drift bör lagringskontot för affärsdata byta till `Standard_ZRS`, så att kopiorna sprids över tre datacenter i regionen. Det är en ändring på en rad i ARM-mallen.
+
 ## Delmoment 5: IaC
 
 Allt i Azure beskrivs som kod i [`templates/azuredeploy.json`](templates/azuredeploy.json), ren ARM-JSON, med parametrar i [`templates/azuredeploy.parameters.json`](templates/azuredeploy.parameters.json).
@@ -415,6 +431,21 @@ Power Automate-flödets URL innehåller en inbyggd signatur, i praktiken en nyck
 ### Skripten
 
 [`deploy.ps1`](deploy.ps1) skapar resursgruppen, kör mallen och publicerar koden i båda funktionerna. `func-nordvik-arenden` får sin kod via zip-deploy, eftersom `func azure functionapp publish` försöker ringa upp appen efteråt och alltid får `403` mot en funktion som medvetet är nätverksstängd. `func-nordvik-portal` publiceras med `func azure functionapp publish` och upp till fem försök, eftersom RBAC-rollerna kan ta en minut att slå igenom. [`destroy.ps1`](destroy.ps1) river hela resursgruppen.
+
+### Samma miljö igen, var som helst
+
+Ingenting i mallen är knutet till en viss resursgrupp. Resursgrupp och region är parametrar till skripten. Namnen som måste vara unika räknas fram ur resursgruppens id. Samma kod kan därför sätta upp en test- eller demomiljö, eller en helt ny miljö för en annan del av företaget, utan att något krockar med den befintliga:
+
+```powershell
+.\deploy.ps1 -ResourceGroup rg-nordvik-test
+.\deploy.ps1 -ResourceGroup rg-nordvikvast -Location westeurope
+```
+
+Rivs på samma sätt:
+
+```powershell
+.\destroy.ps1 -ResourceGroup rg-nordvik-test
+```
 
 ### Riven och återbyggd från mallen
 
@@ -543,7 +574,7 @@ cd v41
 .\deploy.ps1
 ```
 
-Klistra in flödets URL när skriptet frågar. När det är klart skriver det ut portalens adress.
+Klistra in flödets URL när skriptet frågar. När det är klart skriver det ut portalens adress. Utan parametrar byggs miljön i `rg-nordvik`. En annan resursgrupp anges med `-ResourceGroup` (se Delmoment 5).
 
 **Riva:**
 

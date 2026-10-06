@@ -1,3 +1,8 @@
+param(
+    [string]$ResourceGroup = "rg-nordvik",
+    [string]$Location = "swedencentral"
+)
+
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
@@ -8,19 +13,20 @@ $flowUrl = Read-Host "Klistra in Power Automate-flodets HTTP-trigger-URL"
 # parameterfil istallet for att skicka vardet som text pa kommandoraden.
 $parametrar = Get-Content "$scriptDir\templates\azuredeploy.parameters.json" -Raw | ConvertFrom-Json
 $parametrar.parameters.flowUrl.value = $flowUrl
+$parametrar.parameters.location.value = $Location
 $tempParametrar = Join-Path $env:TEMP "nordvik-parametrar-tillfallig.json"
 $parametrar | ConvertTo-Json -Depth 10 | Set-Content $tempParametrar
 
-az group create --name rg-nordvik --location swedencentral | Out-Null
+az group create --name $ResourceGroup --location $Location | Out-Null
 
 az deployment group create `
-    --resource-group rg-nordvik `
+    --resource-group $ResourceGroup `
     --template-file "$scriptDir\templates\azuredeploy.json" `
     --parameters "@$tempParametrar"
 
 Remove-Item $tempParametrar
 
-$out = az deployment group show --resource-group rg-nordvik --name azuredeploy --query properties.outputs -o json | ConvertFrom-Json
+$out = az deployment group show --resource-group $ResourceGroup --name azuredeploy --query properties.outputs -o json | ConvertFrom-Json
 
 function Publish-UtanHalsokontroll($funcName, $mappsokvag) {
     # func-nordvik-arenden ar medvetet last for all trafik utom fran snet-app,
@@ -30,7 +36,7 @@ function Publish-UtanHalsokontroll($funcName, $mappsokvag) {
     $zipPath = Join-Path $env:TEMP "$funcName.zip"
     if (Test-Path $zipPath) { Remove-Item $zipPath }
     Compress-Archive -Path "$mappsokvag\*" -DestinationPath $zipPath -Force
-    az functionapp deployment source config-zip --resource-group rg-nordvik --name $funcName --src $zipPath --build-remote true
+    az functionapp deployment source config-zip --resource-group $ResourceGroup --name $funcName --src $zipPath --build-remote true
     Remove-Item $zipPath
 }
 
