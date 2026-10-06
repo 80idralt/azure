@@ -393,7 +393,7 @@ Sista kommandot stänger den sista öppningen: allt som inte kommer via den priv
 stnordvik80idralt02.privatelink.blob.core.windows.net -> 10.0.1.4
 ```
 
-Två subnät för compute-delen, delegerade till `Microsoft.App/environments`, den delegering Flex Consumption använder för VNet-integration:
+Det första subnätet, `snet-data`, skapades tillsammans med VNet:et ovan. Därefter skapades två subnät till för compute-delen, delegerade till `Microsoft.App/environments`, den delegering Flex Consumption använder för VNet-integration:
 
 ```
 az network vnet subnet create --name snet-app --resource-group rg-nordvik --vnet-name vnet-nordvik --address-prefixes 10.0.2.0/27 --delegations Microsoft.App/environments
@@ -559,6 +559,8 @@ VNet-integration för Flex Consumption visade sig vara sämre dokumenterad än r
 
 Varje fel hittades genom att kontrollera den deployade resursen direkt (`az resource show`, `az functionapp vnet-integration list`) och jämföra med den handbyggda versionen, istället för att lita på hur mallen såg ut.
 
+Det var den fjärde rättningen, Service Endpoint på `snet-app`, som till slut tog bort `403`. Rättningarna gjordes efter varandra och ligger alla kvar i mallen, så det är inte prövat vilka av de tre första som var nödvändiga var för sig. Det säkra är att mallen fungerar med alla fyra.
+
 ## Delmoment 6: Automation och integration
 
 En inskickad felanmälan ska ge en post i en lista och en notis till förvaltaren, i Teams eller Outlook. Lösningen gör båda: **Outlook** för mejlen som förvaltarna kan agera på i efterhand och **Teams** för att nya ärenden ska synas direkt där förvaltarna arbetar.
@@ -618,7 +620,7 @@ Båda mejlen tar sina bilagor från `body('Välj')`. En tom lista ger ett mejl u
 
 ### Verifierat end-to-end
 
-En anmälan skickad via portalen, kategori värme:
+En anmälan skickad via portalen, kategori värme och med en bild bifogad:
 
 ![Bekräftelse i portalen](images/felanmalan-skickad.png)
 
