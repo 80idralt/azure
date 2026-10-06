@@ -157,6 +157,12 @@ Ekonomi följer kostnaden i **Cost Management → Cost analysis** i Azure-portal
 
 För att ekonomi ska kunna öppna kostnadsanalysen själva har `sg-nordvik-ekonomi` rollen **Cost Management Reader** på resursgruppen (se Delmoment 2). Rollen ger bara rätt att läsa kostnader, inte att ändra något.
 
+I vardagen behöver ekonomi inte logga in i Azure alls. Vyn ovan är sparad som `Nordvik per kostnadsstalle` och skickas som **veckorapport via mejl** varje tisdag till ekonomi. Mottagaren får diagrammet direkt i mejlet, plus en länk till kostnadsdatan som CSV-fil för Excel. Så här såg den ut i `test.ekonomi`s inkorg:
+
+![Veckorapporten i ekonomis inkorg](images/kostnadsrapport-mejl.png)
+
+Rapporten är inställd i portalen och ligger utanför ARM-mallen, eftersom den hör till ekonomins uppföljning och inte till själva portalmiljön. Den läser kostnaderna via taggarna och fortsätter därför fungera även när miljön rivs och byggs upp igen. Budgetlarm på prenumerationen mejlar dessutom om kostnaden passerar en gräns.
+
 ## Delmoment 1: Compute
 
 Hela compute-delen körs som **Azure Functions i Flex Consumption-planen**, motiverat i Del A.
