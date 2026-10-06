@@ -161,6 +161,16 @@ I vardagen behöver ekonomi inte logga in i Azure alls. Vyn ovan är sparad som 
 
 ![Veckorapporten i ekonomis inkorg](images/kostnadsrapport-mejl.png)
 
+CSV-filen från mejlet har taggen som egna kolumner. Utdrag:
+
+```
+UsageDate,CostUSD,Cost,ForecastCost,Currency,TagKey,TagValue
+10/5/2026,0.0470606716576341,0.469058420478804,,SEK,kostnadsstalle,
+10/5/2026,0.0784058452850657,0.781478900540776,,SEK,kostnadsstalle,nordvik-portal
+```
+
+Raden med `nordvik-portal` är portalens kostnad den dagen. En tom `TagValue` betyder otaggade resurser, som inte hör till portalen. I Excel filtrerar ekonomi på `TagValue` för att få fram Nordviks kostnad.
+
 Rapporten är inställd i portalen och ligger utanför ARM-mallen, eftersom den hör till ekonomins uppföljning och inte till själva portalmiljön. Den läser kostnaderna via taggarna och fortsätter därför fungera även när miljön rivs och byggs upp igen. Budgetlarm på prenumerationen mejlar dessutom om kostnaden passerar en gräns.
 
 ## Delmoment 1: Compute
