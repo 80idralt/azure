@@ -683,9 +683,7 @@ Lägg sedan förvaltarna i `sg-nordvik-forvaltare` och ekonomipersonalen i `sg-n
 
 **2. SharePoint-listan.** Öppna förvaltarnas sajt (Teams → Nordvik-Forvaltare → Filer → Öppna i SharePoint) och skapa en ny lista med namnet `Felanmalningar` och kolumnerna i tabellen under Delmoment 6.
 
-**3. Listans behörigheter.** På sajten: Inställningar → Webbplatsbehörigheter → Avancerade behörighetsinställningar:
-- Öppna **Nordvik-Forvaltare Members** och lägg till `sg-nordvik-forvaltare`.
-- Öppna **Nordvik-Forvaltare Visitors** och lägg till `sg-nordvik-ekonomi`.
+**3. Listans behörigheter.** Lägg `sg-nordvik-forvaltare` i sajtens Members-grupp (redigera) och `sg-nordvik-ekonomi` i Visitors-gruppen (läsa).
 
 **4. Flödet.** Skapa ett nytt flöde i Power Automate med triggern **När en HTTP-begäran tas emot**, satt till "Vem som helst". Bygg stegen enligt `automation/nordvik-felanmalan-flow.json`: Skapa objekt, Välj, Skicka e-postmeddelande, Publicera kort och Villkor med akutmejlet. Klicka **Publicera** och kopiera HTTP-URL:en från triggern. Den behövs när `deploy.ps1` körs.
 
