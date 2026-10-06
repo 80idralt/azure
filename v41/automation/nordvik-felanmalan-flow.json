@@ -18,6 +18,15 @@
           "connectionReferenceLogicalName": "new_sharedoffice365_4fd6c"
         },
         "runtimeSource": "embedded"
+      },
+      "shared_teams": {
+        "api": {
+          "name": "shared_teams"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "new_sharedteams_82f6d"
+        },
+        "runtimeSource": "embedded"
       }
     },
     "definition": {
@@ -162,8 +171,8 @@
             "actions": {}
           },
           "runAfter": {
-            "Skicka_e-postmeddelande_(V2)": [
-              "Succeeded"
+            "Publicera_kort_i_en_chatt_eller_en_kanal": [
+              "SUCCEEDED"
             ]
           }
         },
@@ -178,6 +187,28 @@
           },
           "runAfter": {
             "Skapa_objekt": [
+              "Succeeded"
+            ]
+          }
+        },
+        "Publicera_kort_i_en_chatt_eller_en_kanal": {
+          "type": "OpenApiConnection",
+          "inputs": {
+            "parameters": {
+              "poster": "Flow bot",
+              "location": "Channel",
+              "body/recipient/groupId": "82f89c0e-2ccd-4a4b-a273-b633e2cd2805",
+              "body/recipient/channelId": "19:n-q51HxpqJ5NneWN8x_0XaafpOlsZRGGGiqVmP-hnSc1@thread.tacv2",
+              "body/messageBody": "{\n  \"type\": \"AdaptiveCard\",\n  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n  \"version\": \"1.4\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"@{if(equals(triggerBody()?['akut'], true), 'AKUT FELANMÄLAN', 'Ny felanmälan')}\",\n      \"weight\": \"Bolder\",\n      \"size\": \"Medium\",\n      \"color\": \"@{if(equals(triggerBody()?['akut'], true), 'Attention', 'Accent')}\"\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"@{triggerBody()?['rubrik']}\",\n      \"size\": \"Large\",\n      \"weight\": \"Bolder\",\n      \"wrap\": true\n    },\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        { \"title\": \"Fastighet\", \"value\": \"@{triggerBody()?['fastighet']}\" },\n        { \"title\": \"Hyresgäst\", \"value\": \"@{triggerBody()?['hyresgast']}\" },\n        { \"title\": \"Kategori\", \"value\": \"@{triggerBody()?['kategori']}\" },\n        { \"title\": \"Tidpunkt\", \"value\": \"@{triggerBody()?['tidpunkt']}\" },\n        { \"title\": \"Ärende-id\", \"value\": \"@{triggerBody()?['id']}\" }\n      ]\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"@{triggerBody()?['beskrivning']}\",\n      \"wrap\": true\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"Action.OpenUrl\",\n      \"title\": \"Öppna listan i SharePoint\",\n      \"url\": \"https://altun1980.sharepoint.com/sites/nordvik-forvaltare/Lists/Felanmalningar\"\n    }\n  ]\n}\n"
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_teams",
+              "operationId": "PostCardToConversation",
+              "connectionName": "shared_teams"
+            }
+          },
+          "runAfter": {
+            "Skicka_e-postmeddelande_(V2)": [
               "Succeeded"
             ]
           }

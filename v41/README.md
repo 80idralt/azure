@@ -22,7 +22,7 @@ Samma Azure-tekniker som använts genom kursen återanvänds som mönster, men d
 - [x] Delmoment 3: Nätverk och säkerhet - defense in depth
 - [x] Delmoment 4: Storage - säker lagring för anmälningar och bilder
 - [x] Delmoment 5: IaC - ARM-mall, versionshanterad och återskapbar
-- [x] Delmoment 6: Automation och integration - Power Automate mot SharePoint och Outlook
+- [x] Delmoment 6: Automation och integration - Power Automate mot SharePoint, Outlook och Teams
 - [x] Delmoment 7: Dokumentation - planering, genomförande och hur lösningen återskapas
 
 ## Översikt
@@ -53,6 +53,7 @@ flowchart TD
     A -->|anmälan + bild| PA["Power Automate<br/>Nordvik-felanmalan"]
     PA --> SP["SharePoint-listan<br/>Felanmalningar"]
     PA --> OL["Outlook<br/>mejl till förvaltarna,<br/>hög prioritet vid akut fel"]
+    PA --> TM["Teams<br/>kort i kanalen General"]
 
     F["Förvaltare<br/>sg-nordvik-forvaltare"] -->|redigera| SP
     E["Ekonomi<br/>sg-nordvik-ekonomi"] -->|läsa| SP
@@ -64,7 +65,7 @@ En felanmälan, steg för steg:
 2. Portalen skickar vidare server-till-server till `func-nordvik-arenden`. Webbläsaren når aldrig den interna funktionen.
 3. `func-nordvik-arenden` sparar anmälan och bilden i lagringen via den privata endpointen, med sin egen hanterade identitet.
 4. Den skickar samma uppgifter, plus bilden, till Power Automate-flödet.
-5. Flödet skapar en rad i SharePoint och mejlar förvaltarna. Är kategorin värme, vatten eller lås kommer ett extra mejl märkt hög prioritet.
+5. Flödet skapar en rad i SharePoint, mejlar förvaltarna och postar ett kort i deras Teams-kanal. Är kategorin värme, vatten eller lås kommer ett extra mejl märkt hög prioritet. Kortet märks då också som akut.
 6. Förvaltare redigerar raden i SharePoint, ekonomi kan bara läsa den. Hyresgästen ser sina anmälningar under "Mina anmälningar".
 
 ## Del A: Centrala tjänster och virtualiseringsnivåer
@@ -80,7 +81,7 @@ En felanmälan, steg för steg:
 | Storage | **Blob Storage** med **lifecycle-policy** | Sparar anmälningar och bilder, flyttar gamla dokument till billigare lagring automatiskt. |
 | IAM | **Entra ID**, **RBAC**, **hanterade identiteter** | Grupper för förvaltare och ekonomi, roller med minsta möjliga behörighet. Funktionerna loggar in mot lagringen utan lösenord. |
 | IaC | **ARM-mallar** | Hela Azure-miljön beskriven som kod, kan byggas om identiskt med ett skript. |
-| Automation | **Power Automate**, **SharePoint**, **Outlook** | Lägger anmälan i en lista och mejlar förvaltaren, med extra mejl vid akuta fel. |
+| Automation | **Power Automate**, **SharePoint**, **Outlook**, **Teams** | Lägger anmälan i en lista, mejlar förvaltaren och postar ett kort i deras Teams-kanal, med extra mejl vid akuta fel. |
 | Övervakning | **Application Insights** | Loggar och fel från funktionerna. |
 
 ### Tre nivåer av virtualisering
@@ -278,7 +279,7 @@ Tre roller, enligt least privilege:
 
 | Grupp | Typ | Syfte | ID |
 |---|---|---|---|
-| `Nordvik-Forvaltare` | Microsoft 365-grupp | SharePoint-sajten och mejladressen dit flödet skickar | `82f89c0e-2ccd-4a4b-a273-b633e2cd2805` |
+| `Nordvik-Forvaltare` | Microsoft 365-grupp | SharePoint-sajten, Teams-kanalen och mejladressen dit flödet skickar | `82f89c0e-2ccd-4a4b-a273-b633e2cd2805` |
 | `sg-nordvik-forvaltare` | Säkerhetsgrupp | RBAC mot lagringen, Members (redigera) på SharePoint-sajten | `836c0262-c307-4b2d-91fe-5c89dfb6c286` |
 | `sg-nordvik-ekonomi` | Säkerhetsgrupp | RBAC mot lagringen, Visitors (läsa) på SharePoint-sajten | `b11988a3-db82-4ca7-ab72-b0a960f1d752` |
 
@@ -560,7 +561,7 @@ Varje fel hittades genom att kontrollera den deployade resursen direkt (`az reso
 
 ## Delmoment 6: Automation och integration
 
-En inskickad felanmälan ska ge en post i en lista och en notis till förvaltaren, i Teams eller Outlook. Valet föll på **Outlook**, eftersom det håller flödet enklare.
+En inskickad felanmälan ska ge en post i en lista och en notis till förvaltaren, i Teams eller Outlook. Lösningen gör båda: **Outlook** för mejlen som förvaltarna kan agera på i efterhand och **Teams** för att nya ärenden ska synas direkt där förvaltarna arbetar.
 
 ### SharePoint-listan
 
@@ -581,14 +582,26 @@ Behörigheterna beskrivs i Delmoment 2.
 
 ### Power Automate-flödet
 
-Flödet `Nordvik-felanmalan` startas av en **HTTP-begäran**. `func-nordvik-arenden` postar dit efter att anmälan sparats. Fyra steg:
+Flödet `Nordvik-felanmalan` startas av en **HTTP-begäran**. `func-nordvik-arenden` postar dit efter att anmälan sparats. Fem steg:
 
 1. **Skapa objekt** i `Felanmalningar`, alla fält kopplade mot det som kommer in.
 2. **Välj** gör om bilagorna till filer som Outlook kan bifoga.
 3. **Skicka ett e-postmeddelande (V2)** till `nordvik-forvaltare@Altun1980.onmicrosoft.com`, alltid, med bilden bifogad.
-4. **Villkor:** om `akut` är sant skickas ett andra mejl till samma adress, markerat **Hög prioritet**, med ämnet "AKUT FELANMÄLAN: ..." och samma bild.
+4. **Publicera kort i en chatt eller kanal** i Teams, kanalen General i `Nordvik-Forvaltare` (se nedan).
+5. **Villkor:** om `akut` är sant skickas ett andra mejl till samma adress, markerat **Hög prioritet**, med ämnet "AKUT FELANMÄLAN: ..." och samma bild.
 
 Flödets definition är exporterad och versionshanterad i [`automation/nordvik-felanmalan-flow.json`](automation/nordvik-felanmalan-flow.json), så logiken går att läsa och återskapa utan att klicka runt i Power Automate.
+
+### Kortet i Teams
+
+Teams-notisen är ett **adaptivt kort**, inte bara text. Rubriken blir röd och säger "AKUT FELANMÄLAN" när `akut` är sant, uppgifterna visas som en faktalista och en knapp öppnar SharePoint-listan direkt. Färg och rubrik styrs av ett uttryck i kortets JSON:
+
+```
+"text":  "@{if(equals(triggerBody()?['akut'], true), 'AKUT FELANMÄLAN', 'Ny felanmälan')}",
+"color": "@{if(equals(triggerBody()?['akut'], true), 'Attention', 'Accent')}"
+```
+
+![Kortet i kanalen General](images/teams-kort.png)
 
 ### Bilden i mejlet
 
