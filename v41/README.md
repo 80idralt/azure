@@ -145,7 +145,8 @@ I ARM-mallen är taggarna en parameter som sätts på varje resurs. I den handby
 ```powershell
 $resourceIds = az resource list --resource-group rg-nordvik --query "[].id" -o tsv
 foreach ($id in $resourceIds) {
-    az resource tag --ids $id --tags avdelning=fastighetsforvaltning kostnadsstalle=nordvik-portal fastighet=gemensam --is-incremental
+    az resource tag --ids $id --is-incremental --tags `
+        avdelning=fastighetsforvaltning kostnadsstalle=nordvik-portal fastighet=gemensam
 }
 ```
 
@@ -159,7 +160,8 @@ Två saker visade sig när miljön byggdes från mallen:
 Resultatet är att alla resurser i resursgruppen är taggade:
 
 ```
-PS> az resource list --resource-group rg-nordvik --query "[].{namn:name, kostnadsstalle:tags.kostnadsstalle}" -o table
+PS> az resource list --resource-group rg-nordvik `
+      --query "[].{namn:name, kostnadsstalle:tags.kostnadsstalle}" -o table
 Namn                                                         Kostnadsstalle
 -----------------------------------------------------------  ----------------
 stdatau622wnde7uy7i                                          nordvik-portal
@@ -219,24 +221,34 @@ Två funktionsappar, båda Python 3.11, med ett gemensamt lagringskonto för sin
 - `func-nordvik-arenden` (bara nåbar inifrån nätverket) - tar emot anmälan, sparar den och startar Power Automate-flödet. Kopplad till `snet-func`.
 
 ```
-$vnetId = az network vnet show --resource-group rg-nordvik --name vnet-nordvik --query id -o tsv
+$vnetId = az network vnet show --resource-group rg-nordvik --name vnet-nordvik `
+  --query id -o tsv
 
-az functionapp create --resource-group rg-nordvik --name func-nordvik-arenden --storage-account stnordvik80idralt03 --flexconsumption-location swedencentral --runtime python --runtime-version 3.11 --vnet $vnetId --subnet snet-func --tags avdelning=fastighetsforvaltning kostnadsstalle=nordvik-portal
+az functionapp create --resource-group rg-nordvik --name func-nordvik-arenden `
+  --storage-account stnordvik80idralt03 --flexconsumption-location swedencentral `
+  --runtime python --runtime-version 3.11 --vnet $vnetId --subnet snet-func `
+  --tags avdelning=fastighetsforvaltning kostnadsstalle=nordvik-portal
 
-az functionapp create --resource-group rg-nordvik --name func-nordvik-portal --storage-account stnordvik80idralt03 --flexconsumption-location swedencentral --runtime python --runtime-version 3.11 --vnet $vnetId --subnet snet-app --tags avdelning=fastighetsforvaltning kostnadsstalle=nordvik-portal
+az functionapp create --resource-group rg-nordvik --name func-nordvik-portal `
+  --storage-account stnordvik80idralt03 --flexconsumption-location swedencentral `
+  --runtime python --runtime-version 3.11 --vnet $vnetId --subnet snet-app `
+  --tags avdelning=fastighetsforvaltning kostnadsstalle=nordvik-portal
 ```
 
 VNet-kopplingen styr bara utgående trafik (vägen till lagringen), inte vem som får ringa in. `func-nordvik-arenden` stängs därför separat för publik åtkomst, så bara `func-nordvik-portal` kan nå den:
 
 ```
-az functionapp config access-restriction add --resource-group rg-nordvik --name func-nordvik-arenden --rule-name allow-portal --priority 100 --action Allow --vnet-name vnet-nordvik --subnet snet-app
+az functionapp config access-restriction add --resource-group rg-nordvik `
+  --name func-nordvik-arenden --rule-name allow-portal --priority 100 --action Allow `
+  --vnet-name vnet-nordvik --subnet snet-app
 ```
 
 `func-nordvik-portal` skickar sin applikationstrafik (`outboundVnetRouting.applicationTraffic: true`), inklusive anrop till `func-nordvik-arenden`, via `snet-app`. Regeln släpper bara in trafik därifrån, allt annat nekas automatiskt så fort en regel finns:
 
 ```
 [
-  { "action": "Allow", "name": "allow-portal", "priority": 100, "vnetSubnetResourceId": ".../subnets/snet-app" },
+  { "action": "Allow", "name": "allow-portal", "priority": 100,
+    "vnetSubnetResourceId": ".../subnets/snet-app" },
   { "action": "Deny", "name": "Deny all", "priority": 2147483647, "ipAddress": "Any" }
 ]
 ```
@@ -248,15 +260,19 @@ Koden ligger i [`arenden/function_app.py`](arenden/function_app.py). Den tar emo
 Testat direkt med curl:
 
 ```
-PS> curl.exe -i -X POST -F "rubrik=Trasig kran" -F "beskrivning=Droppar konstant i koket" -F "kategori=vatten" -F "fastighet=Fastighet 12" -F "hyresgast=HG-1042" "https://func-nordvik-arenden.azurewebsites.net/api/arenden"
+PS> curl.exe -i -X POST -F "rubrik=Trasig kran" -F "beskrivning=Droppar konstant i koket" `
+      -F "kategori=vatten" -F "fastighet=Fastighet 12" -F "hyresgast=HG-1042" `
+      "https://func-nordvik-arenden.azurewebsites.net/api/arenden"
 HTTP/1.1 200 OK
-<h1>Tack för din anmälan</h1><p>Ditt ärende är sparat med id fa-20261005-091910-9b9388, mottaget 2026-10-05:09:19.</p>
+<h1>Tack för din anmälan</h1>
+<p>Ditt ärende är sparat med id fa-20261005-091910-9b9388, mottaget 2026-10-05:09:19.</p>
 ```
 
 Lagringskontot och funktionen är båda stängda för publik åtkomst, så för att se filen krävdes ett tillfälligt undantag för eget IP, borttaget direkt efter kontrollen:
 
 ```
-PS> az storage blob list --account-name stnordvik80idralt02 --container-name anmalningar --auth-mode key --query "[].name" -o table
+PS> az storage blob list --account-name stnordvik80idralt02 --container-name anmalningar `
+      --auth-mode key --query "[].name" -o table
 Result
 --------------------------------------
 fa-20261005-091910-9b9388/anmalan.json
@@ -291,7 +307,8 @@ Tanken var först att förvaltarna bara skulle ha en grupp, som både gav mejlad
 Ekonomi har ingen egen Microsoft 365-grupp. Uppgiften ber bara om läsande insyn, inte om en egen kanal eller mejladress, så ekonomi får istället läsbehörighet på förvaltarnas SharePoint-sajt.
 
 ```
-New-Team -DisplayName "Nordvik-Forvaltare" -MailNickName "nordvik-forvaltare" -Visibility Private -Description "Förvaltare, hanterar felanmälningar"
+New-Team -DisplayName "Nordvik-Forvaltare" -MailNickName "nordvik-forvaltare" `
+  -Visibility Private -Description "Förvaltare, hanterar felanmälningar"
 
 az ad group create --display-name "sg-nordvik-forvaltare" --mail-nickname "sgnordvikforvaltare"
 az ad group create --display-name "sg-nordvik-ekonomi" --mail-nickname "sgnordvikekonomi"
@@ -315,8 +332,10 @@ Ekonomi har dessutom en roll till, scopad till resursgruppen:
 | `sg-nordvik-ekonomi` | Cost Management Reader | Läsa kostnaderna per tagg i Cost Management (se Taggning) |
 
 ```
-az role assignment create --assignee 836c0262-c307-4b2d-91fe-5c89dfb6c286 --role "Storage Blob Data Contributor" --scope $scope
-az role assignment create --assignee b11988a3-db82-4ca7-ab72-b0a960f1d752 --role "Storage Blob Data Reader" --scope $scope
+az role assignment create --assignee 836c0262-c307-4b2d-91fe-5c89dfb6c286 `
+  --role "Storage Blob Data Contributor" --scope $scope
+az role assignment create --assignee b11988a3-db82-4ca7-ab72-b0a960f1d752 `
+  --role "Storage Blob Data Reader" --scope $scope
 ```
 
 Funktionerna har inga lösenord eller nycklar till affärsdatan, de loggar in med sina hanterade identiteter.
@@ -375,19 +394,30 @@ Ekonomi ser resursgruppen men inga resurser i den. Ett försök att ta bort resu
 Anmälningarna innehåller personuppgifter om hyresgäster: namn på fastighet och lägenhet, hyresgästnummer, beskrivningar och bilder från hemmen. Därför får lagringen inte vara publikt åtkomlig. Lösningen är ett virtuellt nätverk med en **privat endpoint**, en egen ingång till lagringskontot som bara syns inifrån nätverket, i kombination med en **privat DNS-zon** som gör att kontots namn slår upp till en privat adress för den som frågar inifrån nätverket.
 
 ```
-az network vnet create --name vnet-nordvik --resource-group rg-nordvik --location swedencentral --address-prefix 10.0.0.0/16 --subnet-name snet-data --subnet-prefix 10.0.1.0/24
+az network vnet create --name vnet-nordvik --resource-group rg-nordvik `
+  --location swedencentral --address-prefix 10.0.0.0/16 `
+  --subnet-name snet-data --subnet-prefix 10.0.1.0/24
 
-az network private-dns zone create --resource-group rg-nordvik --name privatelink.blob.core.windows.net
+az network private-dns zone create --resource-group rg-nordvik `
+  --name privatelink.blob.core.windows.net
 
-az network private-dns link vnet create --resource-group rg-nordvik --zone-name privatelink.blob.core.windows.net --name link-nordvik --virtual-network vnet-nordvik --registration-enabled false
+az network private-dns link vnet create --resource-group rg-nordvik `
+  --zone-name privatelink.blob.core.windows.net --name link-nordvik `
+  --virtual-network vnet-nordvik --registration-enabled false
 
-$storageId = az storage account show --name stnordvik80idralt02 --resource-group rg-nordvik --query id -o tsv
+$storageId = az storage account show --name stnordvik80idralt02 `
+  --resource-group rg-nordvik --query id -o tsv
 
-az network private-endpoint create --name pe-nordvik-storage --resource-group rg-nordvik --vnet-name vnet-nordvik --subnet snet-data --private-connection-resource-id $storageId --group-id blob --connection-name pe-nordvik-storage-koppling
+az network private-endpoint create --name pe-nordvik-storage --resource-group rg-nordvik `
+  --vnet-name vnet-nordvik --subnet snet-data --private-connection-resource-id $storageId `
+  --group-id blob --connection-name pe-nordvik-storage-koppling
 
-az network private-endpoint dns-zone-group create --resource-group rg-nordvik --endpoint-name pe-nordvik-storage --name default --private-dns-zone privatelink.blob.core.windows.net --zone-name blob
+az network private-endpoint dns-zone-group create --resource-group rg-nordvik `
+  --endpoint-name pe-nordvik-storage --name default `
+  --private-dns-zone privatelink.blob.core.windows.net --zone-name blob
 
-az storage account update --name stnordvik80idralt02 --resource-group rg-nordvik --default-action Deny
+az storage account update --name stnordvik80idralt02 --resource-group rg-nordvik `
+  --default-action Deny
 ```
 
 Sista kommandot stänger den sista öppningen: allt som inte kommer via den privata endpointen avvisas. DNS-zongruppen skapade automatiskt rätt post:
@@ -399,9 +429,13 @@ stnordvik80idralt02.privatelink.blob.core.windows.net -> 10.0.1.4
 Det första subnätet, `snet-data`, skapades tillsammans med VNet:et ovan. Därefter skapades två subnät till för compute-delen, delegerade till `Microsoft.App/environments`, den delegering Flex Consumption använder för VNet-integration:
 
 ```
-az network vnet subnet create --name snet-app --resource-group rg-nordvik --vnet-name vnet-nordvik --address-prefixes 10.0.2.0/27 --delegations Microsoft.App/environments
+az network vnet subnet create --name snet-app --resource-group rg-nordvik `
+  --vnet-name vnet-nordvik --address-prefixes 10.0.2.0/27 `
+  --delegations Microsoft.App/environments
 
-az network vnet subnet create --name snet-func --resource-group rg-nordvik --vnet-name vnet-nordvik --address-prefixes 10.0.3.0/27 --delegations Microsoft.App/environments
+az network vnet subnet create --name snet-func --resource-group rg-nordvik `
+  --vnet-name vnet-nordvik --address-prefixes 10.0.3.0/27 `
+  --delegations Microsoft.App/environments
 ```
 
 | Subnät | Adresser | Används av |
@@ -425,7 +459,10 @@ Privata endpoints ignorerar NSG-regler som standard, så på `snet-data` är `pr
 Verifierat i den deployade miljön:
 
 ```
-PS> az network vnet subnet list --resource-group rg-nordvik --vnet-name vnet-nordvik --query "[].{subnat:name, nsg:networkSecurityGroup.id, pePolicy:privateEndpointNetworkPolicies}" -o table
+PS> $q = "[].{subnat:name, nsg:networkSecurityGroup.id, " +
+         "pePolicy:privateEndpointNetworkPolicies}"
+PS> az network vnet subnet list --resource-group rg-nordvik --vnet-name vnet-nordvik `
+      --query $q -o table
 snet-data  .../networkSecurityGroups/nsg-nordvik-data  NetworkSecurityGroupEnabled
 snet-app   .../networkSecurityGroups/nsg-nordvik-app   Disabled
 snet-func  .../networkSecurityGroups/nsg-nordvik-func  Disabled
@@ -445,10 +482,12 @@ snet-func  .../networkSecurityGroups/nsg-nordvik-func  Disabled
 Testat utifrån, från en vanlig dator med ägarkontot. Både lagringen och den interna funktionen säger nej:
 
 ```
-PS> az storage blob list --account-name stdatau622wnde7uy7i --container-name anmalningar --auth-mode login -o table
+PS> az storage blob list --account-name stdatau622wnde7uy7i --container-name anmalningar `
+      --auth-mode login -o table
 The request may be blocked by network rules of storage account.
 
-PS> curl.exe -i -X POST "https://func-nordvik-arenden-u622wnde7uy7i.azurewebsites.net/api/arenden"
+PS> curl.exe -i -X POST `
+      "https://func-nordvik-arenden-u622wnde7uy7i.azurewebsites.net/api/arenden"
 HTTP/1.1 403 Ip Forbidden
 ```
 
@@ -459,10 +498,14 @@ Felanmälningar har två sorters innehåll med olika livslängd. Bilderna som h�
 ```
 az group create --name rg-nordvik --location swedencentral
 
-az storage account create --name stnordvik80idralt02 --resource-group rg-nordvik --location swedencentral --sku Standard_LRS --kind StorageV2 --access-tier Hot --allow-blob-public-access false --min-tls-version TLS1_2
+az storage account create --name stnordvik80idralt02 --resource-group rg-nordvik `
+  --location swedencentral --sku Standard_LRS --kind StorageV2 --access-tier Hot `
+  --allow-blob-public-access false --min-tls-version TLS1_2
 
-az storage container create --account-name stnordvik80idralt02 --name anmalningar --auth-mode key --public-access off
-az storage container create --account-name stnordvik80idralt02 --name dokument --auth-mode key --public-access off
+az storage container create --account-name stnordvik80idralt02 --name anmalningar `
+  --auth-mode key --public-access off
+az storage container create --account-name stnordvik80idralt02 --name dokument `
+  --auth-mode key --public-access off
 ```
 
 `--allow-blob-public-access false` stänger publik blobåtkomst på hela kontot. Nätverket låses i Delmoment 3.
@@ -475,13 +518,17 @@ az storage container create --account-name stnordvik80idralt02 --name dokument -
 Lifecycle-policyn ligger som kod i [`storage/lifecycle-policy.json`](storage/lifecycle-policy.json) och gäller bara filer i `dokument/`:
 
 ```
-az storage account management-policy create --account-name stnordvik80idralt02 --resource-group rg-nordvik --policy @v41/storage/lifecycle-policy.json
+az storage account management-policy create --account-name stnordvik80idralt02 `
+  --resource-group rg-nordvik --policy "@v41/storage/lifecycle-policy.json"
 ```
 
 Samma regel finns inbyggd i ARM-mallen. Azure går igenom den ungefär en gång per dygn och flyttar filer i `dokument/` som inte ändrats på över 90 dagar. Filen behåller namn och adress, bara priset ändras. Verifierat i den deployade miljön:
 
 ```
-PS> az storage account management-policy show --account-name stdatau622wnde7uy7i --resource-group rg-nordvik --query "policy.rules[].{namn:name, prefix:definition.filters.prefixMatch[0], dagar:definition.actions.baseBlob.tierToCool.daysAfterModificationGreaterThan}" -o table
+PS> $q = "policy.rules[].{namn:name, prefix:definition.filters.prefixMatch[0], " +
+         "dagar:definition.actions.baseBlob.tierToCool.daysAfterModificationGreaterThan}"
+PS> az storage account management-policy show --account-name stdatau622wnde7uy7i `
+      --resource-group rg-nordvik --query $q -o table
 Namn                Prefix     Dagar
 ------------------  ---------  -------
 dokument-till-cool  dokument/  90.0
@@ -645,7 +692,8 @@ Flödets körningshistorik, alla körningar under testdagen lyckades:
 Och filerna i lagringen, kontrollerade med ett tillfälligt IP-undantag:
 
 ```
-PS> az storage blob list --account-name stnordvik80idralt02 --container-name anmalningar --auth-mode key --query "[].name" -o table
+PS> az storage blob list --account-name stnordvik80idralt02 --container-name anmalningar `
+      --auth-mode key --query "[].name" -o table
 Result
 --------------------------------------
 fa-20261005-091910-9b9388/anmalan.json
@@ -671,7 +719,8 @@ fa-20261005-115457-2ae8aa/anmalan.json
 **1. Grupperna.** Skapa förvaltarnas Microsoft 365-grupp med Team (kräver PowerShell-modulen MicrosoftTeams och `Connect-MicrosoftTeams`) och de två säkerhetsgrupperna:
 
 ```powershell
-New-Team -DisplayName "Nordvik-Forvaltare" -MailNickName "nordvik-forvaltare" -Visibility Private -Description "Förvaltare, hanterar felanmälningar"
+New-Team -DisplayName "Nordvik-Forvaltare" -MailNickName "nordvik-forvaltare" `
+  -Visibility Private -Description "Förvaltare, hanterar felanmälningar"
 
 az ad group create --display-name "sg-nordvik-forvaltare" --mail-nickname "sgnordvikforvaltare"
 az ad group create --display-name "sg-nordvik-ekonomi" --mail-nickname "sgnordvikekonomi"
