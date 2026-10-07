@@ -6,7 +6,7 @@
 
 **Klass:** MOV25
 
-**Datum:** 2026-10-06
+**Datum:** 2026-10-07
 
 ## Syfte
 
@@ -100,9 +100,11 @@ Alla tre kör kod på Microsofts hårdvara. Skillnaden är hur mycket man själv
 
 Nordviks krav pekar alla åt samma håll:
 
-- **Ojämn trafik.** Nästan inget mellan 00 och 06, toppar morgon och kväll, upp till 120 samtidiga användare vid månadsskifte. Serverless skalar upp själv vid toppar och ner till noll på natten.
-- **Tåla att en instans faller bort.** En ensam VM eller container är en enda punkt som kan gå sönder. Med serverless sprider Azure körningarna över flera instanser automatiskt.
+- **Ojämn trafik.** Cirka 1 800 inloggningar per vardag, nästan inget mellan 00 och 06, toppar 07-09 och 17-20, upp till 120 samtidiga användare vid månadsskifte. Serverless skalar upp själv vid toppar och ner till noll på natten.
+- **Skurar av anmälningar.** I snitt 70 anmälningar per dygn, men en vattenläcka eller ett strömavbrott kan ge över 300 på en timme. Varje anmälan startar en körning. Azure startar fler instanser när körningarna blir många. Ingen kapacitet behöver planeras för den värsta timmen.
+- **Tillgänglighet.** Kravet är 99,5 % på kontorstid och att lösningen tål att en instans faller bort. Microsofts SLA garanterar minst 99,9 % både för Functions och för lagringskonton med LRS på nivån Hot, alltså över kravet. Körningarna sprids över flera instanser. En instans som går sönder ersätts automatiskt.
 - **Inte betala för stillastående kapacitet.** Nordvik betalar bara när någon faktiskt använder portalen.
+- **Tillväxt.** Beståndet växer med 5-8 fastigheter per år. Fler fastigheter ger fler anmälningar. Det hanteras av samma automatiska skalning utan ändringar i lösningen.
 - **Lite drift.** Ingen behöver patcha operativsystem, det gör Azure.
 
 **Bortvalt:** En VM hade krävt minst två maskiner och en lastbalanserare för att tåla att en faller bort och hade kostat pengar dygnet runt. En container löser mer av det, men kräver fortfarande att man själv bygger och underhåller avbilder och sätter upp skalning. För en portal som i grunden tar emot ett formulär och sparar det är serverless den enklaste och billigaste lösningen som uppfyller alla krav.
@@ -115,9 +117,10 @@ Ungefärlig månadskostnad med Nordviks trafik:
 |---|---|
 | Funktionerna | Nära 0 kr. Även toppar på hundratals anmälningar i timmen ryms i den mängd körningar som ingår gratis varje månad. Natten kostar ingenting. |
 | Privat endpoint | Runt 80 kr. Den största fasta kostnaden, oberoende av trafik. Det är priset för att lagringen inte är publik. |
-| Lagring, privat DNS-zon, Application Insights | Några kronor |
+| Lagring | Några kronor. 5-10 GB nya bilder per år ligger i Hot, kontraktens 40 GB flyttas till den billigare nivån Cool (se Delmoment 4). |
+| Privat DNS-zon, Application Insights | Några kronor |
 
-Totalt runt 100 kr i månaden. Det mesta är säkerhet, inte trafik. Siffrorna är uppskattningar. Den faktiska kostnaden följer ekonomi i Cost Management (se Taggning).
+Totalt runt 100 kr i månaden, långt under Nordviks riktvärde på 2 500 kr. Det mesta är säkerhet, inte trafik. Marginalen gör att lösningen klarar både tillväxten och en uppgradering till zonredundant lagring i skarp drift (se Delmoment 4) utan att närma sig riktvärdet. Siffrorna är uppskattningar. Den faktiska kostnaden följer ekonomi i Cost Management (se Taggning).
 
 **Avvägning:** efter en stund utan trafik tar första anropet några sekunder längre, eftersom en instans måste startas (cold start). Det märks till exempel första anmälan på morgonen, inte under toppar. Det går att undvika med en instans som alltid är igång, men den kostar dygnet runt och går emot kravet att inte betala för stillastående kapacitet.
 
@@ -271,7 +274,7 @@ En hyresgäst som skriver in sitt hyresgästnummer ser sina anmälningar, med AK
 
 Tre roller, enligt least privilege:
 
-- **Hyresgäst:** ingen egen Entra-identitet och ingen inloggning. Formuläret är öppet och hyresgästnumret är ett vanligt fält, inte en hemlighet. "Mina anmälningar" filtrerar på det nummer som skrivs in, utan att kontrollera vem som skriver. En skarp lösning med 5500 externa hyresgäster hade använt Entra External ID, men det ingår inte i kursen, så det är en medveten avgränsning. Hyresgästen har aldrig någon direkt åtkomst till lagringen, bara portalens egen hanterade identitet har det och bara med läsrätt.
+- **Hyresgäst:** ingen egen Entra-identitet och ingen inloggning. Formuläret är öppet och hyresgästnumret är ett vanligt fält, inte en hemlighet. "Mina anmälningar" filtrerar på det nummer som skrivs in, utan att kontrollera vem som skriver. Uppgiften säger att själva applikationen ska hållas enkel och att tyngdpunkten ligger på infrastrukturen, så portalen är ett enkelt formulär och inloggning för hyresgäster är en medveten avgränsning. En skarp lösning med 5 500 externa hyresgäster hade använt Entra External ID. Hyresgästen har aldrig någon direkt åtkomst till lagringen, bara portalens egen hanterade identitet har det och bara med läsrätt.
 - **Förvaltare:** redigerar anmälningar i SharePoint och får mejlen. Skrivrätt till `anmalningar`-containern via RBAC.
 - **Ekonomi:** läser anmälningar i SharePoint och följer kostnaderna i Cost Management. Bara läsrätt, både till `anmalningar`-containern och till kostnaderna.
 
@@ -369,7 +372,7 @@ Ekonomi ser resursgruppen men inga resurser i den. Ett försök att ta bort resu
 
 ## Delmoment 3: Nätverk och säkerhet
 
-Lagringen ska inte vara publikt åtkomlig. Lösningen är ett virtuellt nätverk med en **privat endpoint**, en egen ingång till lagringskontot som bara syns inifrån nätverket, i kombination med en **privat DNS-zon** som gör att kontots namn slår upp till en privat adress för den som frågar inifrån nätverket.
+Anmälningarna innehåller personuppgifter om hyresgäster: namn på fastighet och lägenhet, hyresgästnummer, beskrivningar och bilder från hemmen. Därför får lagringen inte vara publikt åtkomlig. Lösningen är ett virtuellt nätverk med en **privat endpoint**, en egen ingång till lagringskontot som bara syns inifrån nätverket, i kombination med en **privat DNS-zon** som gör att kontots namn slår upp till en privat adress för den som frågar inifrån nätverket.
 
 ```
 az network vnet create --name vnet-nordvik --resource-group rg-nordvik --location swedencentral --address-prefix 10.0.0.0/16 --subnet-name snet-data --subnet-prefix 10.0.1.0/24
@@ -451,7 +454,7 @@ HTTP/1.1 403 Ip Forbidden
 
 ## Delmoment 4: Storage
 
-Felanmälningar har två sorters innehåll med olika livslängd. Bilderna som hör till en anmälan läses ofta i början, medan kontrakt och besiktningsprotokoll läses sällan efter de första tre månaderna. De ligger därför i varsin container med olika regler.
+Felanmälningar har två sorters innehåll med olika livslängd. Bilderna som hör till en anmälan, oftast 2-5 MB styck och 5-10 GB per år, läses ofta i början. Kontrakt och besiktningsprotokoll, cirka 40 GB, läses sällan efter de första tre månaderna. De ligger därför i varsin container med olika regler, så att kontrakten kan flyttas till en billigare lagringsnivå utan att anmälningarna påverkas.
 
 ```
 az group create --name rg-nordvik --location swedencentral
@@ -564,6 +567,8 @@ Det var den fjärde rättningen, Service Endpoint på `snet-app`, som till slut 
 ## Delmoment 6: Automation och integration
 
 En inskickad felanmälan ska ge en post i en lista och en notis till förvaltaren, i Teams eller Outlook. Lösningen gör båda: **Outlook** för mejlen som förvaltarna kan agera på i efterhand och **Teams** för att nya ärenden ska synas direkt där förvaltarna arbetar.
+
+Tillsammans bildar delarna en **händelsekedja**: en inskickad anmälan i portalen startar `func-nordvik-arenden`, som sparar i Blob Storage och startar Power Automate-flödet. Flödet skriver till SharePoint, mejlar via Outlook och postar i Teams. Ingen del frågar efter nya ärenden, varje steg startas av det föregående.
 
 ### SharePoint-listan
 
