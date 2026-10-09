@@ -14,7 +14,7 @@ Varje veckomapp har en egen README som dokumenterar veckans arbete, med syfte, s
 - [x] [V38 - IaC med ARM-templates](v38/)
 - [x] [V39 - Automation och integration](v39/)
 - [x] [V40 - Virtualiseringsnivåer](v40/)
-- [ ] [V41 - Examination: Nordvik Fastigheter](v41/)
+- [x] [V41 - Examination: Nordvik Fastigheter](v41/)
 
 ## Om Novatrix
 
